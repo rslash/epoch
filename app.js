@@ -1,4 +1,6 @@
 "use strict";
+const DEBUG = 1
+
 const Discord = require("discord.js")
 const settings = require("./settings.json")
 const client = new Discord.Client();
@@ -11,6 +13,7 @@ var tform = require("dateformat")
 var teams = []
 var PAUSECHECKER = true
 var checkerStarted = false
+var streamChecker
 
 function WikiTeamList(){
 tlog("wikiTeamList")
@@ -19,47 +22,50 @@ tlog("wikiTeamList")
 		htable = htable[htable.length-1]
 		tlog(htable)
 		for (var iq = 1; iq < htable.length; iq++){ 	//index start at 1 to skip header row
-			if (client.channels.get(htable[iq][2].trim()) != undefined){
-				teams.push(new Team(htable[iq][0].trim(), htable[iq][1].trim(), htable[iq][2].trim())) //chan
-				if (iq == htable.length - 1 && !checkerStarted) {
-					checkerStarted = true
-					StartChecker()
-				}
-			}
+			if (client.channels.get(htable[iq][2].split(",")[0].trim()) != undefined){
+				teams.push(new Team(htable[iq][0].trim(), htable[iq][1].trim(), htable[iq][2].trim())) //site, tags, chan
+			} 
+//			else if (DEBUG = 1) teams.push(new Team(htable[iq][0].trim(), htable[iq][1].trim(), settings.debugchannel))
+		}
+		if (!checkerStarted) {
+			checkerStarted = true
+			streamChecker = new StreamChecker()
 		}
 	})
 }
 
-function Team(url, tagstring, chanID){
-	this.tags = tagstring 	//split and trimmed in Stream object
+function Team(url, tagstring, chanstring){
+	this.tags = tagstring.trim() 	//split and trimmed in Stream object
 	tlog(this.tags)
-	this.chanID = chanID
-	this.url = url
+	this.chans = chanstring.trim()
+	tlog(this.chans)
+	this.url = url.trim()
 	this.streams = []
-	this.cycle = 1
 	
 	this.wikiStreamList = () => {
 		this.streams = []
-		htmltable.convertUrl(this.url, (htable)=> {
+		htmltable.convertUrl(this.url, (htable)=> {			
 			htable = htable[htable.length-1]
 			let ii = htable.length
 			for (var ip = 1; ip < ii; ip++){ 	//index start at 1 to skip header row
-				this.streams.push(new Stream(htable[ip][0], htable[ip][1], this.tags, this.chanID))
+				this.streams.push(new Stream(htable[ip][0], htable[ip][1], this.tags, this.chans))
+//				tlog("wikistreamlist new stream")
+				
 			}
-			tlog("wikistreamlist "+this.chanID)
 		})
 		PAUSECHECKER = false
 	}
 	this.wikiStreamList()
 }
 
-function Stream(nick, url, tagstr, chanID){
+function Stream(nick, url, tagstr, chanstr){
 	this.nick = nick
 	this.url = url.toLowerCase()
 	this.tags = tagstr.split(",")
 		for (var t = 0; t < this.tags.length; t++) this.tags[t] = this.tags[t].trim()
-	this.chanID = chanID
-	
+	this.chans = chanstr.split(",")
+		for (var c = 0; c < this.chans.length; c++) this.chans[c] = this.chans[c].trim()
+
 	this.stat = {"online":"","game":"","title":"","fps":"","error":""}
 	this.newstat = {"online":"","game":"","title":"","fps":"","error":""}
 
@@ -80,13 +86,13 @@ function Stream(nick, url, tagstr, chanID){
 					if (body.stream != null){
 						this.newstat = {
 							online : true,
-							title : body.stream.channel.status,
-							game : body.stream.game,
+							title : body.stream.channel.status || "(no title)",
+							game : body.stream.game || "(no game)",
 							fps : `at ${Number(body.stream.average_fps).toPrecision(4)}fps`,
 							error : false
 						}
-tlog(this.nick+" is online")
 						this.announce()
+tlog(this.nick+" is online")
 					}
 					this.copyStat()
 				} 
@@ -99,8 +105,8 @@ tlog(this.nick+" is online")
 					if (body.livestream != undefined && body.livestream[0].media_is_live != "0"){
 						this.newstat = {
 							online : true,
-							title : body.livestream[0].media_status,
-							game : body.livestream[0].category_name,
+							title : body.livestream[0].media_status || "(no title)",
+							game : body.livestream[0].category_name || "(no game)",
 							fps : "",
 							error : false
 						}
@@ -117,8 +123,8 @@ tlog(this.nick+" is online")
 					if (body.online != false){
 						this.newstat = {
 							online : true,
-							title : body.name,
-							game : body.type.name,
+							title : body.name || "(no title)",
+							game : body.type.name || "(no game)",
 							fps: "",
 							error: false
 						}
@@ -135,21 +141,24 @@ tlog(this.nick+" is online")
 	
 	this.announce = () => {
 		for (var jp = 0; jp < this.tags.length; jp++){
-			if (this.newstat.game == null) this.newstat.game == ""
-			if (this.newstat.title == null) this.newstat.title == ""
-			
 			if (this.newstat.title.toLowerCase().indexOf(this.tags[jp].toLowerCase()) != -1 || 
 			  this.newstat.game.toLowerCase().indexOf(this.tags[jp].toLowerCase()) != -1){
-				if (this.stat.online != true ||  //post if channel newly online, 
+				if (this.stat.online != true ||  	//post if channel newly online, 
 				  this.stat.game != this.newstat.game || this.stat.title != this.newstat.title){
 					tlog("**"+this.tags[jp]+"**: "+this.nick+" is streaming "+this.newstat.game+this.newstat.fps)
 					clog("```"+this.newstat.title+" "+this.url+"```")
-					let newmsg = ` **${(jp != 0) ? this.tags[jp] : "LIVE"}:** `
-					newmsg += ` ${this.nick} is streaming \`${this.newstat.game}\` ${this.newstat.fps} ` + "\n"
-					newmsg += `\`${this.newstat.title}\` <${this.url}>`
-					try {
-						client.channels.get(this.chanID).sendMessage(newmsg)
-					} catch (e){}
+
+					let mainTag = ` **${(jp != 0) ? this.tags[jp] : "LIVE"}:** `
+					let riderTag = ` **${this.tags[jp]}:** `
+					let newmsg = ` ${this.nick} is streaming \`${this.newstat.game}\` ${this.newstat.fps} ` + 
+						  "\n" + `\`${this.newstat.title}\` <${this.url}>`
+
+					for (var ch = 0; ch < this.chans.length; ch++){
+						try {
+							if (DEBUG == 0) client.channels.get(settings.debugchannel).sendMessage((ch == 0 ? mainTag : riderTag) + newmsg)
+							else client.channels.get(this.chans[ch]).sendMessage((ch == 0 ? mainTag : riderTag) + newmsg)
+						} catch (e){}
+					}
 					break
 				}
 			}
@@ -158,42 +167,61 @@ tlog(this.nick+" is online")
 	this.copyStat = () => {this.stat = this.newstat}
 }
 
-function StartChecker(){
+function StreamChecker(){
 	var T_index = 0
 	var st_index = 0
-	setInterval(() => {
-	//	tlog(streams[cycle % streams.length])
-		if (!PAUSECHECKER) {
+	
+	this.intervalset = () => {
+		setInterval(() => {
+		  if (!PAUSECHECKER) {
 			try {
 				teams[T_index].streams[st_index].checkStatus()
-						st_index++
+//			clog(T_index+","+st_index+","+teams[T_index].streams[st_index].tags)
+					st_index++
 				if (st_index >= teams[T_index].streams.length){
 					st_index = 0
 					T_index++
 					if (T_index >= teams.length){
 						T_index = 0
 					}
-			tlog("CHECKING TEAM "+T_index)
 				}
 			} catch(e){	
-				tlog("checkStreams failed")	
+//				tlog("checkStreams failed")	
 				if (T_index != 0 || st_index != 0){
 //					client.channels.get(settings.debugchannel).sendMessage("checkStreams failed")
 				}
 			}
-		}
-	}, 200 )
+		  }
+		}, 200 )
+	}
+	this.intervalset()
 }
 
-var wasReady = false
+var lastEditDate = ""
+function WikiChangeWatcher(){
+	setInterval(() => {
+		htmltable.convertUrl("http://bs1.wikidot.com/system:recent-changes", (htable)=> {
+			htable = htable[htable.length-1]
+			if (htable[0][3] != lastEditDate){
+				if (htable[0][4].indexOf("redslash") == -1 || lastEditDate == ""){
+					client.channels.get(settings.debugchannel).sendMessage(`Last edit by ${htable[0][4]}`)
+				}
+				lastEditDate = htable[0][3]
+tlog("WikiChangeWatcher started")
+			}
+		})	
+	}, 60*1000 )
+}
+
+var allReady = false
 client.on("ready", () => {
 	tlog("Streambot online?");
-	if (!wasReady){
+	if (!allReady){
 		WikiTeamList()
-		wasReady = true
+		WikiChangeWatcher()
+		allReady = true
 	}
-//	client.channels.get(destChanID).sendMessage("I'm online?")
-//	getLogs()
+	client.channels.get(settings.debugchannel).sendMessage("Bot restarted.")
 })
 
 client.on("message", message => {
@@ -207,7 +235,7 @@ client.on("message", message => {
 	else if (message.content.startsWith("!streams")){
 		let mymsg = reloadStreams(message.channel.id)
 		if (mymsg != ""){
-			message.channel.sendMessage(`Checking this channel's lists: ${mymsg}`)
+			message.channel.sendMessage(`Loading this channel's lists: ${mymsg}`)
 		} else message.channel.sendMessage(`No streams linked to this channel.`)
 	}
 	else if (message.content.startsWith("!teams")){
@@ -215,7 +243,7 @@ client.on("message", message => {
 //		message.channel.sendMessage(`Streambot reloaded.`)
 	}
 	else if (message.content.startsWith("!help")){
-		message.channel.sendMessage("Check this channel's stream lists: `!streams` \n")// \nSee code: !epoch")
+		message.channel.sendMessage("Load this channel's streams: `!streams` \n")// \nSee code: !epoch")
 	} 
 	else if (message.content.startsWith("!logs")){
 		if (message.channel.type == "text"){
@@ -253,15 +281,21 @@ function reloadTeams(){
 	WikiTeamList()
 }	
 function reloadStreams(id){
-	let gotMatch = ""
+	let mainMatch = ""
+	let riderMatch = ""
 	for (var y = 0; y < teams.length; y++){
-		if (teams[y].chanID == id){
+		if (teams[y].chans.startsWith(id)){
 			PAUSECHECKER = true
-			gotMatch += "\n<" + teams[y].url + "> (" + teams[y].tags + ")"
+			mainMatch += "\n<" + teams[y].url + "> (" + teams[y].tags + ")"
 			teams[y].wikiStreamList()
+		} else if (teams[y].chans.indexOf(id) != -1) {
+			riderMatch += "\n<" + teams[y].url + "> (" + teams[y].tags + ")"
 		}
 	}
-	return gotMatch
+	if (riderMatch != ""){
+		mainMatch += "\nSecondary lists (not reloaded):" + riderMatch
+	}
+	return mainMatch
 }
 
 function Log(message, file, limit){
@@ -292,9 +326,10 @@ function Log(message, file, limit){
 			this.filename = this.lastMsg.guild.name+"_"+this.lastMsg.channel.name+"-"
 			let continueLogging = true
 			
-			if (fs.statSync(this.filename+this.fileNo+".log").size > 500000) {
-				this.lastMsg.channel.sendFile(this.filename+this.fileNo+".log")
-//				this.lastMsg.channel.sendMessage(this.filename+this.fileNo+".log")
+			let filesize = fs.statSync(this.filename+this.fileNo+".log").size
+			if ( filesize > 500000) {
+				if (DEBUG == 0) this.lastMsg.channel.sendFile(this.filename+this.fileNo+".log")
+				else this.lastMsg.channel.sendMessage(`${this.filename}`+`${this.fileNo}.log (${Math.ceil(filesize/1024)}KB)`)
 				this.fileNo++
 				if (this.fileNo >= this.limit) {
 					continueLogging = false
@@ -310,8 +345,8 @@ function Log(message, file, limit){
 				if (messages.size == 100){
 					new Log(this.lastMsg, this.fileNo)
 				} else {
-					this.lastMsg.channel.sendFile(this.filename+this.fileNo+".log")
-//					this.lastMsg.channel.sendMessage(this.filename+this.fileNo+".log")
+					if (DEBUG == 0) this.lastMsg.channel.sendFile(this.filename+this.fileNo+".log")
+					else this.lastMsg.channel.sendMessage(`${this.filename}`+`${this.fileNo}.log (${Math.ceil(filesize/1024)}KB)`)
 				}
 			}
 		}).catch(console.error)
