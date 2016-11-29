@@ -8,57 +8,58 @@ var fs = require("fs")
 var jfs = require("jsonfile")
 var tform = require("dateformat")
 
-var invite = "https://discordapp.com/oauth2/authorize?permissions=1341643841&scope=bot&client_id=252137764638818305"
-var destChanID = "252133971570327552"
-var tags = ["Chrono", "Xeno", "speedrun", "race"]
-var streams = []
-var ip = 0
-//try { streams = jfs.readFileSync("streams.txt")
-//} catch (e) {
-	wikiStreamList()
-//}
+var teams = []
+var PAUSECHECKER = true
+var checkerStarted = false
 
-//*
-var cycle = 1
-setInterval(() => {
-//	tlog(streams[cycle % streams.length])
-	try {
-		streams[cycle % streams.length].checkStatus()
-	} catch(e){	
-		tlog("checkStreams failed")	
-	}
-	if (!(cycle % 100)) {
-		jfs.writeFileSync("streams.txt",streams)
-	}
-	cycle++
-}, 500)
-//*/
-
-
-function wikiStreamList(){
-tlog("wikiStreamList")
-	streams = []
-//	request("http://bs1.wikidot.com/ct:streams", (err, response, body)=> {
-//		if (!err && response.statusCode == 200){
-//			var htable = htmltable.convert(body)
-	htmltable.convertUrl("http://bs1.wikidot.com/ct:streams", (htable)=> {
-
+function WikiTeamList(){
+tlog("wikiTeamList")
+	teams = []
+	htmltable.convertUrl("http://bs1.wikidot.com/streams", (htable)=> {
 		htable = htable[htable.length-1]
-		tlog(htable.length)
 		tlog(htable)
-
-		var ii = htable.length
-		for (var ip = 0; ip < ii; ip++){ 
-			streams.push(new Stream(htable[ip]["0"], htable[ip]["1"]))
+		for (var iq = 1; iq < htable.length; iq++){ 	//index start at 1 to skip header row
+			if (client.channels.get(htable[iq][2].trim()) != undefined){
+				teams.push(new Team(htable[iq][0].trim(), htable[iq][1].trim(), htable[iq][2].trim())) //chan
+				if (iq == htable.length - 1 && !checkerStarted) {
+					checkerStarted = true
+					StartChecker()
+				}
+			}
 		}
-//		} else {}
-		jfs.writeFileSync("streams.txt",streams)
 	})
 }
 
-function Stream(nick, url){
+function Team(url, tagstring, chanID){
+	this.tags = tagstring 	//split and trimmed in Stream object
+	tlog(this.tags)
+	this.chanID = chanID
+	this.url = url
+	this.streams = []
+	this.cycle = 1
+	
+	this.wikiStreamList = () => {
+		this.streams = []
+		htmltable.convertUrl(this.url, (htable)=> {
+			htable = htable[htable.length-1]
+			let ii = htable.length
+			for (var ip = 1; ip < ii; ip++){ 	//index start at 1 to skip header row
+				this.streams.push(new Stream(htable[ip][0], htable[ip][1], this.tags, this.chanID))
+			}
+			tlog("wikistreamlist "+this.chanID)
+		})
+		PAUSECHECKER = false
+	}
+	this.wikiStreamList()
+}
+
+function Stream(nick, url, tagstr, chanID){
 	this.nick = nick
 	this.url = url.toLowerCase()
+	this.tags = tagstr.split(",")
+		for (var t = 0; t < this.tags.length; t++) this.tags[t] = this.tags[t].trim()
+	this.chanID = chanID
+	
 	this.stat = {"online":"","game":"","title":"","fps":"","error":""}
 	this.newstat = {"online":"","game":"","title":"","fps":"","error":""}
 
@@ -70,9 +71,6 @@ function Stream(nick, url){
 	}
 	
 	this.checkStatus = () => {
-//		tlog(this.nick+": checking "+this.url)
-		this.newstat = {"online":false,"game":"","title":"","fps":"","error":true}
-
 		switch (this.site)
 		{
 		case "twitch":
@@ -84,9 +82,10 @@ function Stream(nick, url){
 							online : true,
 							title : body.stream.channel.status,
 							game : body.stream.game,
-							fps : `at ${Number(body.stream.average_fps).toPrecision(3)}fps`,
+							fps : `at ${Number(body.stream.average_fps).toPrecision(4)}fps`,
 							error : false
 						}
+tlog(this.nick+" is online")
 						this.announce()
 					}
 					this.copyStat()
@@ -105,7 +104,9 @@ function Stream(nick, url){
 							fps : "",
 							error : false
 						}
+						this.announce()
 					}
+					this.copyStat()	
 				} 
 			})
 			break
@@ -121,82 +122,203 @@ function Stream(nick, url){
 							fps: "",
 							error: false
 						}
+						this.announce()
 					}
+					this.copyStat()
 				} 
 			})
 			break
 		default: 
-			tlog("CASE: def")
 			this.newstat.error = true
 		}
 	}
 	
 	this.announce = () => {
-		tlog(this.nick)
-		tlog(this.newstat)
-		for (var jp = 0; jp < tags.length; jp++){
-			if (this.newstat.title.toLowerCase().indexOf(tags[jp].trim().toLowerCase()) != -1 || 
-			  this.newstat.game.toLowerCase().indexOf(tags[jp].trim().toLowerCase()) != -1){
+		for (var jp = 0; jp < this.tags.length; jp++){
+			if (this.newstat.game == null) this.newstat.game == ""
+			if (this.newstat.title == null) this.newstat.title == ""
+			
+			if (this.newstat.title.toLowerCase().indexOf(this.tags[jp].toLowerCase()) != -1 || 
+			  this.newstat.game.toLowerCase().indexOf(this.tags[jp].toLowerCase()) != -1){
 				if (this.stat.online != true ||  //post if channel newly online, 
 				  this.stat.game != this.newstat.game || this.stat.title != this.newstat.title){
-					tlog("**"+tags[jp]+"**: "+this.nick+" is streaming "+this.newstat.game+this.newstat.fps)
-					tlog("```"+this.newstat.title+" "+this.url+"```")
-
-					client.channels.get(destChanID).sendMessage(` **${tags[jp]}:**  ` +
-						`${this.nick} is streaming \`${this.newstat.game}\` ${this.newstat.fps} ` + "\n" +
-						`\`${this.newstat.title}\`  <${this.url}>`)
+					tlog("**"+this.tags[jp]+"**: "+this.nick+" is streaming "+this.newstat.game+this.newstat.fps)
+					clog("```"+this.newstat.title+" "+this.url+"```")
+					let newmsg = ` **${(jp != 0) ? this.tags[jp] : "LIVE"}:** `
+					newmsg += ` ${this.nick} is streaming \`${this.newstat.game}\` ${this.newstat.fps} ` + "\n"
+					newmsg += `\`${this.newstat.title}\` <${this.url}>`
+					try {
+						client.channels.get(this.chanID).sendMessage(newmsg)
+					} catch (e){}
 					break
 				}
 			}
 		}
 	}
-
 	this.copyStat = () => {this.stat = this.newstat}
 }
 
+function StartChecker(){
+	var T_index = 0
+	var st_index = 0
+	setInterval(() => {
+	//	tlog(streams[cycle % streams.length])
+		if (!PAUSECHECKER) {
+			try {
+				teams[T_index].streams[st_index].checkStatus()
+						st_index++
+				if (st_index >= teams[T_index].streams.length){
+					st_index = 0
+					T_index++
+					if (T_index >= teams.length){
+						T_index = 0
+					}
+			tlog("CHECKING TEAM "+T_index)
+				}
+			} catch(e){	
+				tlog("checkStreams failed")	
+				if (T_index != 0 || st_index != 0){
+//					client.channels.get(settings.debugchannel).sendMessage("checkStreams failed")
+				}
+			}
+		}
+	}, 200 )
+}
 
+var wasReady = false
 client.on("ready", () => {
-	tlog("I'm Online?");
-//	client.channels.get(destChanID).sendMessage("Streambot online.")
+	tlog("Streambot online?");
+	if (!wasReady){
+		WikiTeamList()
+		wasReady = true
+	}
+//	client.channels.get(destChanID).sendMessage("I'm online?")
 //	getLogs()
 })
 
 client.on("message", message => {
 	if (message.content === "!ping"){
-		message.reply("pong!");
+		message.channel.sendMessage("pong!");
+	} 
+	else if (message.content === "!status"){
+		let not = (PAUSECHECKER ? "not " : "")
+		message.channel.sendMessage(`Stream check is ${not}active.`);
 	} 
 	else if (message.content.startsWith("!streams")){
-		wikiStreamList()
-		client.channels.get(destChanID).sendMessage("Cleared cache and re-loaded <http://bs1.wikidot.com/ct:streams>")
-	} 
+		let mymsg = reloadStreams(message.channel.id)
+		if (mymsg != ""){
+			message.channel.sendMessage(`Checking this channel's lists: ${mymsg}`)
+		} else message.channel.sendMessage(`No streams linked to this channel.`)
+	}
+	else if (message.content.startsWith("!teams")){
+//		if (message.author.id == settings.botowner) reloadTeams()
+//		message.channel.sendMessage(`Streambot reloaded.`)
+	}
 	else if (message.content.startsWith("!help")){
-		client.channels.get(destChanID).sendMessage("Clear cache: `!streams`")
+		message.channel.sendMessage("Check this channel's stream lists: `!streams` \n")// \nSee code: !epoch")
 	} 
-	else if (message.content.startsWith("//")){
+	else if (message.content.startsWith("!logs")){
+		if (message.channel.type == "text"){
+			let args = message.content.split(" ")
+			let limit = 0
+			if (args.length > 1) {
+				if (args[1] > 0 ) limit = args[1]
+			}
+			if (message.author.id == settings.botowner){
+				fs.writeFileSync(message.guild.name+"_"+message.channel.name+"-0.log","")
+				new Log(message, 0, limit)
+			} else message.channel.sendMessage("Ask Red to do this, thanks. :>")
+		}
+	} 
+	else if (message.content.startsWith("!slap")){
+		let args = message.content.split(" ")
+		if (args.length > 1) {
+			htmltable.convertUrl("http://bs1.wikidot.com/moves", (htable)=> {
+				htable = htable[htable.length-1]
+				let rand = htable[Math.floor( Math.random()*(htable.length-1) )+1][0]
+				let target = (message.author.id == "89084521336541184" ? "CronoKirby" : args[1])
+				message.channel.sendMessage(`Epoch uses **${rand}** on ${target}`)
+			})
+		}
 	} 
 	else if (message.content.startsWith("??")){
 	} 
 });
 
-client.login(settings.token);
+client.login(settings.token)
 
-/*
-function getLogs(){
-	var log = client.getChannelMessages(destChanID, 10)
-	var str = ""
-	for (var msg in log){
-		str += `[${msg.createdTimeStamp}] ${msg.author}: ${msg.content}`
-		var attach = msg.attachments
-		for (var att in attach){
-			str += ` ${att.url} (${att.filename},${att.filesize})` //proxy_url??
+
+function reloadTeams(){
+	PAUSECHECKER = true
+	WikiTeamList()
+}	
+function reloadStreams(id){
+	let gotMatch = ""
+	for (var y = 0; y < teams.length; y++){
+		if (teams[y].chanID == id){
+			PAUSECHECKER = true
+			gotMatch += "\n<" + teams[y].url + "> (" + teams[y].tags + ")"
+			teams[y].wikiStreamList()
 		}
-		if (msg.editedTimeStamp) str += ` ${msg.editedTimeStamp}`
-		str += "\n"
-	}	
-	tlog(str)
+	}
+	return gotMatch
 }
-//*/
 
+function Log(message, file, limit){
+	this.fileNo = file
+	this.lastMsg = message
+	this.limit = limit
+
+	setTimeout( () => {
+		this.lastMsg.channel.fetchMessages({before: this.lastMsg.id, limit: 100})
+		.then(messages => {
+			tlog(`Received ${messages.size} messages`)
+			let str = ""
+			let earlierLine = ""
+			let msgKeys = messages.keyArray()
+			for (var [key, msg] of messages){
+				earlierLine = `[${tform(msg.createdAt,"yyyy-mm-dd HH:MM:ss")}] ${msg.author.username}: ${msg.content}`
+				for (var [key, att] of msg.attachments){
+					if (att.url) earlierLine += ` ${att.url} (${att.filename}, ${Math.ceil(att.filesize/1024)}KB)` //proxy_url??
+				}
+				if (msg.editedTimeStamp) earlierLine += ` ${tform(msg.editedTimeStamp,"yyyy-mm-dd HH:MM:ss")}` + "\n"
+				earlierLine += "\n"
+
+				this.lastMsg = msg
+				str = earlierLine + str
+			}
+//			clog(str)
+
+			this.filename = this.lastMsg.guild.name+"_"+this.lastMsg.channel.name+"-"
+			let continueLogging = true
+			
+			if (fs.statSync(this.filename+this.fileNo+".log").size > 500000) {
+				this.lastMsg.channel.sendFile(this.filename+this.fileNo+".log")
+//				this.lastMsg.channel.sendMessage(this.filename+this.fileNo+".log")
+				this.fileNo++
+				if (this.fileNo >= this.limit) {
+					continueLogging = false
+				}
+			} else {
+				let logcontent = fs.readFileSync(this.filename+this.fileNo+".log")
+				str += logcontent
+			}
+			
+			if (continueLogging) {
+				fs.writeFileSync(this.filename+this.fileNo+".log",str)
+	
+				if (messages.size == 100){
+					new Log(this.lastMsg, this.fileNo)
+				} else {
+					this.lastMsg.channel.sendFile(this.filename+this.fileNo+".log")
+//					this.lastMsg.channel.sendMessage(this.filename+this.fileNo+".log")
+				}
+			}
+		}).catch(console.error)
+	},1000)
+}
+
+function clog(s){console.log(s)}
 function tlog(s){
 	console.log(tform(new Date(), "HH:MM:ss"))
 	console.log(s)
