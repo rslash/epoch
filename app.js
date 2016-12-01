@@ -1,3 +1,5 @@
+//"Streambot" 20161130 Redslash
+
 "use strict";
 const DEBUG = 1
 
@@ -11,27 +13,37 @@ var jfs = require("jsonfile")
 var tform = require("dateformat")
 
 var teams = []
-var PAUSECHECKER = true
-var checkerStarted = false
-var streamChecker
+var streamChecker = new StreamChecker()
 
 function WikiTeamList(){
 tlog("wikiTeamList")
 	teams = []
-	htmltable.convertUrl("http://bs1.wikidot.com/streams", (htable)=> {
-		htable = htable[htable.length-1]
-		tlog(htable)
-		for (var iq = 1; iq < htable.length; iq++){ 	//index start at 1 to skip header row
-			if (client.channels.get(htable[iq][2].split(",")[0].trim()) != undefined){
-				teams.push(new Team(htable[iq][0].trim(), htable[iq][1].trim(), htable[iq][2].trim())) //site, tags, chan
-			} 
-//			else if (DEBUG = 1) teams.push(new Team(htable[iq][0].trim(), htable[iq][1].trim(), settings.debugchannel))
+	for (var [key, chan] of client.channels){
+		if (chan.type == "text"){
+			TryPushTeam(chan.topic, chan.id)
 		}
-		if (!checkerStarted) {
-			checkerStarted = true
-			streamChecker = new StreamChecker()
+	}
+}
+
+function TryPushTeam(t, id){
+	let topic = t || ""
+	let delim = [topic.indexOf("("),topic.indexOf(")[http://"),topic.indexOf("]")]
+	if (delim[0] != -1 && delim[0] < delim[1] && delim[1] < delim[2]){
+		let tag = topic.split("(")[1].split(")[http://")[0]
+		let url = "http://" + topic.split(")[http://")[1].split("]")[0]
+		
+		let foundmatch = false
+		for (var y = 0; y < teams.length; y++){
+			if (teams[y].chans.startsWith(id)){
+				teams[y] = new Team(url, tag, (DEBUG != 1 ? id : settings.debugchannel))
+				foundmatch = true
+				break
+			}
 		}
-	})
+		if (!foundmatch){
+			teams.push(new Team(url, tag, (DEBUG != 1 ? id : settings.debugchannel)))
+		}
+	}
 }
 
 function Team(url, tagstring, chanstring){
@@ -52,8 +64,9 @@ function Team(url, tagstring, chanstring){
 //				tlog("wikistreamlist new stream")
 				
 			}
+tlog("STREAM GET")
 		})
-		PAUSECHECKER = false
+		streamChecker.Unpause() 
 	}
 	this.wikiStreamList()
 }
@@ -81,7 +94,7 @@ function Stream(nick, url, tagstr, chanstr){
 		{
 		case "twitch":
 			request(`https://api.twitch.tv/kraken/streams/${this.handle}?client_id=67w6z9i09xv2uoojdm9l0wsyph4hxo6`, (err, response, body) => {
-				if (!err && response.statusCode == 200){
+				if (!err && 200 == response.statusCode){
 					body = JSON.parse(body)
 					if (body.stream != null){
 						this.newstat = {
@@ -100,7 +113,7 @@ tlog(this.nick+" is online")
 			break
 		case "hitbox":
 			request(`https://api.hitbox.tv/media/live/${this.handle}`, (err, response, body) => {
-				if (!err && response.statusCode == 200){
+				if (!err && 200 == response.statusCode){
 					body = JSON.parse(body)
 					if (body.livestream != undefined && body.livestream[0].media_is_live != "0"){
 						this.newstat = {
@@ -118,7 +131,7 @@ tlog(this.nick+" is online")
 			break
 		case "beam":
 			request(`https://beam.pro/api/v1/channels/${this.handle}`, (err, response, body) => {
-				if (!err && response.statusCode == 200){
+				if (!err && 200 == response.statusCode){
 					body = JSON.parse(body)
 					if (body.online != false){
 						this.newstat = {
@@ -155,8 +168,8 @@ tlog(this.nick+" is online")
 
 					for (var ch = 0; ch < this.chans.length; ch++){
 						try {
-							if (DEBUG == 0) client.channels.get(settings.debugchannel).sendMessage((ch == 0 ? mainTag : riderTag) + newmsg)
-							else client.channels.get(this.chans[ch]).sendMessage((ch == 0 ? mainTag : riderTag) + newmsg)
+							if (DEBUG != 1) client.channels.get(this.chans[ch]).sendMessage((0 == ch ? mainTag : riderTag) + newmsg)
+							else client.channels.get(settings.debugchannel).sendMessage((0 == ch ? mainTag : riderTag) + newmsg)
 						} catch (e){}
 					}
 					break
@@ -167,31 +180,40 @@ tlog(this.nick+" is online")
 	this.copyStat = () => {this.stat = this.newstat}
 }
 
+var T_index = 0
+var st_index = 0
 function StreamChecker(){
-	var T_index = 0
-	var st_index = 0
-	
+	this.stopped = true
+
+	this.Pause = () => {
+		this.stopped = true
+	}
+	this.Unpause = () => {
+		T_index = 0
+		st_index = 0
+		this.stopped = false
+	}
 	this.intervalset = () => {
 		setInterval(() => {
-		  if (!PAUSECHECKER) {
-			try {
-				teams[T_index].streams[st_index].checkStatus()
-//			clog(T_index+","+st_index+","+teams[T_index].streams[st_index].tags)
+			if (!this.stopped && teams[T_index] != null){
+				if (teams[T_index].streams[st_index] != null) {
+					teams[T_index].streams[st_index].checkStatus()
+//clog(teams[T_index].streams[st_index])
 					st_index++
-				if (st_index >= teams[T_index].streams.length){
-					st_index = 0
+					if (st_index >= teams[T_index].streams.length){
+						st_index = 0
+						T_index++
+						if (T_index >= teams.length){
+							T_index = 0
+						}
+					}
+				} else {
 					T_index++
 					if (T_index >= teams.length){
 						T_index = 0
 					}
 				}
-			} catch(e){	
-//				tlog("checkStreams failed")	
-				if (T_index != 0 || st_index != 0){
-//					client.channels.get(settings.debugchannel).sendMessage("checkStreams failed")
-				}
 			}
-		  }
 		}, 200 )
 	}
 	this.intervalset()
@@ -203,7 +225,7 @@ function WikiChangeWatcher(){
 		htmltable.convertUrl("http://bs1.wikidot.com/system:recent-changes", (htable)=> {
 			htable = htable[htable.length-1]
 			if (htable[0][3] != lastEditDate){
-				if (htable[0][4].indexOf("redslash") == -1 || lastEditDate == ""){
+				if (-1 == htable[0][4].indexOf("redslash") || "" == lastEditDate){
 					client.channels.get(settings.debugchannel).sendMessage(`Last edit by ${htable[0][4]}`)
 				}
 				lastEditDate = htable[0][3]
@@ -224,23 +246,25 @@ client.on("ready", () => {
 	client.channels.get(settings.debugchannel).sendMessage("Bot restarted.")
 })
 
+client.on("channelUpdate", (oldchan,newchan) => {
+	if (oldchan.topic != newchan.topic){
+		TryPushTeam(newchan.topic, newchan.id)
+	}
+})
+
 client.on("message", message => {
 	if (message.content === "!ping"){
 		message.channel.sendMessage("pong!");
 	} 
 	else if (message.content === "!status"){
-		let not = (PAUSECHECKER ? "not " : "")
+		let not = (streamChecker.stopped ? "not " : "")
 		message.channel.sendMessage(`Stream check is ${not}active.`);
 	} 
 	else if (message.content.startsWith("!streams")){
 		let mymsg = reloadStreams(message.channel.id)
 		if (mymsg != ""){
-			message.channel.sendMessage(`Loading this channel's lists: ${mymsg}`)
+			message.channel.sendMessage(`Loading this channel's streams: ${mymsg}`)
 		} else message.channel.sendMessage(`No streams linked to this channel.`)
-	}
-	else if (message.content.startsWith("!teams")){
-//		if (message.author.id == settings.botowner) reloadTeams()
-//		message.channel.sendMessage(`Streambot reloaded.`)
 	}
 	else if (message.content.startsWith("!help")){
 		message.channel.sendMessage("Load this channel's streams: `!streams` \n")// \nSee code: !epoch")
@@ -263,9 +287,12 @@ client.on("message", message => {
 		if (args.length > 1) {
 			htmltable.convertUrl("http://bs1.wikidot.com/moves", (htable)=> {
 				htable = htable[htable.length-1]
-				let rand = htable[Math.floor( Math.random()*(htable.length-1) )+1][0]
-				let target = (message.author.id == "89084521336541184" ? "CronoKirby" : args[1])
-				message.channel.sendMessage(`Epoch uses **${rand}** on ${target}`)
+				let move = htable[Math.floor( Math.random()*(htable.length-1) )+1][0]
+				let rand2 = Math.floor(Math.random()*20)+1
+				let target = args[1]
+				if (1 == rand2) target = message.author.name
+				else if (20 == rand2) target = "the chat"
+				message.channel.sendMessage(`Epoch uses **${move}** on ${target}`)
 			})
 		}
 	} 
@@ -276,16 +303,12 @@ client.on("message", message => {
 client.login(settings.token)
 
 
-function reloadTeams(){
-	PAUSECHECKER = true
-	WikiTeamList()
-}	
 function reloadStreams(id){
 	let mainMatch = ""
 	let riderMatch = ""
 	for (var y = 0; y < teams.length; y++){
 		if (teams[y].chans.startsWith(id)){
-			PAUSECHECKER = true
+			streamChecker.Pause()
 			mainMatch += "\n<" + teams[y].url + "> (" + teams[y].tags + ")"
 			teams[y].wikiStreamList()
 		} else if (teams[y].chans.indexOf(id) != -1) {
@@ -309,7 +332,7 @@ function Log(message, file, limit){
 			tlog(`Received ${messages.size} messages`)
 			let str = ""
 			let earlierLine = ""
-			let msgKeys = messages.keyArray()
+//			let msgKeys = messages.keyArray()
 			for (var [key, msg] of messages){
 				earlierLine = `[${tform(msg.createdAt,"yyyy-mm-dd HH:MM:ss")}] ${msg.author.username}: ${msg.content}`
 				for (var [key, att] of msg.attachments){
@@ -328,7 +351,7 @@ function Log(message, file, limit){
 			
 			let filesize = fs.statSync(this.filename+this.fileNo+".log").size
 			if ( filesize > 500000) {
-				if (DEBUG == 0) this.lastMsg.channel.sendFile(this.filename+this.fileNo+".log")
+				if (DEBUG != 1) this.lastMsg.channel.sendFile(this.filename+this.fileNo+".log")
 				else this.lastMsg.channel.sendMessage(`${this.filename}`+`${this.fileNo}.log (${Math.ceil(filesize/1024)}KB)`)
 				this.fileNo++
 				if (this.fileNo >= this.limit) {
@@ -342,10 +365,10 @@ function Log(message, file, limit){
 			if (continueLogging) {
 				fs.writeFileSync(this.filename+this.fileNo+".log",str)
 	
-				if (messages.size == 100){
+				if (100 == messages.size){
 					new Log(this.lastMsg, this.fileNo)
 				} else {
-					if (DEBUG == 0) this.lastMsg.channel.sendFile(this.filename+this.fileNo+".log")
+					if (DEBUG != 1) this.lastMsg.channel.sendFile(this.filename+this.fileNo+".log")
 					else this.lastMsg.channel.sendMessage(`${this.filename}`+`${this.fileNo}.log (${Math.ceil(filesize/1024)}KB)`)
 				}
 			}
