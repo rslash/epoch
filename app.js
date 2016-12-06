@@ -26,6 +26,7 @@ tlog("wikiTeamList")
 }
 
 function TryPushTeam(t, id){
+	streamChecker.Pause()
 	let topic = t || ""
 	let delim = [topic.indexOf("("),topic.indexOf(")[http://"),topic.indexOf("]")]
 	if (delim[0] != -1 && delim[0] < delim[1] && delim[1] < delim[2]){
@@ -55,6 +56,7 @@ function TryPushTeam(t, id){
 			} catch(e) {}
 		}
 	}
+	streamChecker.Unpause()
 }
 
 function Team(url, tagstring, chanstring){
@@ -120,7 +122,7 @@ function Stream(nick, url, tagstr, chanstr){
 						}
 						this.announce()
 tlog(this.nick+" is online")
-					} else if (this.stat.online) {this.offAnnounce()} 
+					} //else if (this.stat.online) {this.offAnnounce()} 
 					this.copyStat()
 				} 
 			})
@@ -138,7 +140,7 @@ tlog(this.nick+" is online")
 							error : false
 						}
 						this.announce()
-					} else if (this.stat.online) {this.offAnnounce()} 
+					} //else if (this.stat.online) {this.offAnnounce()} 
 					this.copyStat()	
 				} 
 			})
@@ -156,7 +158,7 @@ tlog(this.nick+" is online")
 							error: false
 						}
 						this.announce()
-					} else if (this.stat.online) {this.offAnnounce()} 
+					} //else if (this.stat.online) {this.offAnnounce()} 
 					this.copyStat()	
 				} 
 			})
@@ -180,7 +182,7 @@ tlog(this.nick+" is online")
 					if (upM < 10){upM = "0" + upM}
 					
 				let upstring = (this.uptime != 0 ? `(${upHr} : ${upM})` : "( NEW )")
-				let newmsg = ` ${this.nick} is streaming  \`${this.newstat.game}\`   ${upstring}` + 
+				let newmsg = ` ${this.nick} is streaming  \`${this.newstat.game}\`` + 
 						"\n" + `\`${this.newstat.title}\` <${this.url}>`
 				let destChannel = (DEBUG != 1 ? client.channels.get(this.chans[0]) : client.channels.get(settings.debugchannel))
 						
@@ -188,11 +190,11 @@ tlog(this.nick+" is online")
 					this.uptime = now
 					try {
 						destChannel.sendMessage(` **${(jp != 0) ? this.tags[jp] : "LIVE"}:** ${newmsg}`)
-							.then(message => {this.message = message})
+							.then(message => {this.message = message}).catch(console.error)
 					} catch (e){}
-				} else if (this.stat.upMin != this.newstat.upMin){	// secondary title/game-change will appear, without posting new announcement
+				} else if (this.newstat.changed && this.stat.changed){	// secondary title/game-change will appear, without posting new announcement
 					try {
-						this.message.edit(` **${(jp != 0) ? this.tags[jp] : "LIVE"}:** ${newmsg}`)
+						this.message.edit(` **${(jp != 0) ? this.tags[jp] : "LIVE"}:** ${newmsg}`).catch(console.error)
 					} catch (e){}
 				}
 				break
@@ -211,7 +213,7 @@ tlog(this.nick+" is online")
 				let destChannel = (DEBUG != 1 ? client.channels.get(this.chans[0]) : client.channels.get(settings.debugchannel))
 
 				try {
-					this.message.edit(`**ended:** ${newmsg}`)
+					this.message.edit(`**ended:** ${newmsg}`).catch(console.error)
 					this.message = ""
 				} catch (e){}
 			  }
