@@ -1,4 +1,4 @@
-//"Streambot" 20161130 Redslash
+//"Streambot" 20161201 Redslash
 
 "use strict";
 const DEBUG = 1
@@ -34,14 +34,25 @@ function TryPushTeam(t, id){
 		
 		let foundmatch = false
 		for (var y = 0; y < teams.length; y++){
-			if (teams[y].chans.startsWith(id)){
-				teams[y] = new Team(url, tag, (DEBUG != 1 ? id : settings.debugchannel))
-				foundmatch = true
-				break
-			}
+			try {
+				if (teams[y].chans.startsWith(id)){
+					teams[y] = new Team(url, tag, (DEBUG != 1 ? id : settings.debugchannel))
+					foundmatch = true
+					break
+				}
+			} catch(e) {}
 		}
 		if (!foundmatch){
 			teams.push(new Team(url, tag, (DEBUG != 1 ? id : settings.debugchannel)))
+		}
+	} else { // wipe team if existed before
+		for (var y = 0; y < teams.length; y++){
+			try {
+				if (teams[y].chans.startsWith(id)){
+					teams[y] = new Team("","","")
+					break
+				}
+			} catch(e) {}
 		}
 	}
 }
@@ -78,9 +89,11 @@ function Stream(nick, url, tagstr, chanstr){
 		for (var t = 0; t < this.tags.length; t++) this.tags[t] = this.tags[t].trim()
 	this.chans = chanstr.split(",")
 		for (var c = 0; c < this.chans.length; c++) this.chans[c] = this.chans[c].trim()
+	this.uptime = 0
+	this.message
 
-	this.stat = {"online":"","game":"","title":"","fps":"","error":""}
-	this.newstat = {"online":"","game":"","title":"","fps":"","error":""}
+	this.stat    = {"online":"","game":"","title":"","fps":"","error":"","changed":"","upMin":""}
+	this.newstat = {"online":"","game":"","title":"","fps":"","error":"","changed":"","upMin":""}
 
 	this.handle = this.url.slice(this.url.lastIndexOf("/") + 1)
 	if (this.url.indexOf("twitch.tv") != -1){
@@ -90,6 +103,7 @@ function Stream(nick, url, tagstr, chanstr){
 	}
 	
 	this.checkStatus = () => {
+		this.newstat = {"online":"","game":"","title":"","fps":"","error":"","changed":""}
 		switch (this.site)
 		{
 		case "twitch":
@@ -106,7 +120,7 @@ function Stream(nick, url, tagstr, chanstr){
 						}
 						this.announce()
 tlog(this.nick+" is online")
-					}
+					} else if (this.stat.online) {this.offAnnounce()} 
 					this.copyStat()
 				} 
 			})
@@ -124,7 +138,7 @@ tlog(this.nick+" is online")
 							error : false
 						}
 						this.announce()
-					}
+					} else if (this.stat.online) {this.offAnnounce()} 
 					this.copyStat()	
 				} 
 			})
@@ -142,8 +156,8 @@ tlog(this.nick+" is online")
 							error: false
 						}
 						this.announce()
-					}
-					this.copyStat()
+					} else if (this.stat.online) {this.offAnnounce()} 
+					this.copyStat()	
 				} 
 			})
 			break
@@ -154,29 +168,56 @@ tlog(this.nick+" is online")
 	
 	this.announce = () => {
 		for (var jp = 0; jp < this.tags.length; jp++){
-			if (this.newstat.title.toLowerCase().indexOf(this.tags[jp].toLowerCase()) != -1 || 
-			  this.newstat.game.toLowerCase().indexOf(this.tags[jp].toLowerCase()) != -1){
-				if (this.stat.online != true ||  	//post if channel newly online, 
-				  this.stat.game != this.newstat.game || this.stat.title != this.newstat.title){
-					tlog("**"+this.tags[jp]+"**: "+this.nick+" is streaming "+this.newstat.game+this.newstat.fps)
-					clog("```"+this.newstat.title+" "+this.url+"```")
+			if ( this.newstat.title.toLowerCase().indexOf(this.tags[jp].toLowerCase()) != -1	// find a match
+			  || this.newstat.game.toLowerCase().indexOf(this.tags[jp].toLowerCase()) != -1){
 
-					let mainTag = ` **${(jp != 0) ? this.tags[jp] : "LIVE"}:** `
-					let riderTag = ` **${this.tags[jp]}:** `
-					let newmsg = ` ${this.nick} is streaming \`${this.newstat.game}\` ${this.newstat.fps} ` + 
-						  "\n" + `\`${this.newstat.title}\` <${this.url}>`
-
-					for (var ch = 0; ch < this.chans.length; ch++){
-						try {
-							if (DEBUG != 1) client.channels.get(this.chans[ch]).sendMessage((0 == ch ? mainTag : riderTag) + newmsg)
-							else client.channels.get(settings.debugchannel).sendMessage((0 == ch ? mainTag : riderTag) + newmsg)
-						} catch (e){}
-					}
-					break
+				this.newstat.changed = (this.stat.game != this.newstat.game || this.stat.title != this.newstat.title) // find a change
+				
+				let now = Date.now()/1000
+				this.newstat.upMin = Math.floor((now - this.uptime)/60)
+				let upHr = Math.floor(this.newstat.upMin/60)
+				let upM = this.newstat.upMin-60*upHr
+					if (upM < 10){upM = "0" + upM}
+					
+				let upstring = (this.uptime != 0 ? `(${upHr} : ${upM})` : "( NEW )")
+				let newmsg = ` ${this.nick} is streaming  \`${this.newstat.game}\`   ${upstring}` + 
+						"\n" + `\`${this.newstat.title}\` <${this.url}>`
+				let destChannel = (DEBUG != 1 ? client.channels.get(this.chans[0]) : client.channels.get(settings.debugchannel))
+						
+				if (this.newstat.changed && !this.stat.changed){	//if changed (and not immediately after another change)
+					this.uptime = now
+					try {
+						destChannel.sendMessage(` **${(jp != 0) ? this.tags[jp] : "LIVE"}:** ${newmsg}`)
+							.then(message => {this.message = message})
+					} catch (e){}
+				} else if (this.stat.upMin != this.newstat.upMin){	// secondary title/game-change will appear, without posting new announcement
+					try {
+						this.message.edit(` **${(jp != 0) ? this.tags[jp] : "LIVE"}:** ${newmsg}`)
+					} catch (e){}
 				}
+				break
 			}
 		}
 	}
+	this.offAnnounce = () => {
+		for (var jp = 0; jp < this.tags.length; jp++){
+			if ( this.newstat.title.toLowerCase().indexOf(this.tags[jp].toLowerCase()) != -1	// find a match
+			  || this.newstat.game.toLowerCase().indexOf(this.tags[jp].toLowerCase()) != -1){
+
+				let upHr = Math.floor(this.stat.upMin/60)
+				let newmsg = ` ${this.nick} was streaming \`${this.newstat.game}\` (${upHr} : ${this.stat.upMin-60*upHr}) ` + 
+						"\n" + `\`${this.newstat.title}\` <${this.url}> `
+
+				let destChannel = (DEBUG != 1 ? client.channels.get(this.chans[0]) : client.channels.get(settings.debugchannel))
+
+				try {
+					this.message.edit(`**ended:** ${newmsg}`)
+					this.message = ""
+				} catch (e){}
+			  }
+		}
+	}
+	
 	this.copyStat = () => {this.stat = this.newstat}
 }
 
@@ -196,7 +237,7 @@ function StreamChecker(){
 	this.intervalset = () => {
 		setInterval(() => {
 			if (!this.stopped && teams[T_index] != null){
-				if (teams[T_index].streams[st_index] != null) {
+				try {
 					teams[T_index].streams[st_index].checkStatus()
 //clog(teams[T_index].streams[st_index])
 					st_index++
@@ -207,11 +248,10 @@ function StreamChecker(){
 							T_index = 0
 						}
 					}
-				} else {
-					T_index++
-					if (T_index >= teams.length){
-						T_index = 0
-					}
+				} catch(e) {}
+				T_index++
+				if (T_index >= teams.length){
+					T_index = 0
 				}
 			}
 		}, 200 )
@@ -252,51 +292,61 @@ client.on("channelUpdate", (oldchan,newchan) => {
 	}
 })
 
-client.on("message", message => {
-	if (message.content === "!ping"){
-		message.channel.sendMessage("pong!");
+client.on("message", m => {
+	if (m.content === "!ping"){
+		m.channel.sendMessage("pong!");
 	} 
-	else if (message.content === "!status"){
+	else if (m.content === "!status"){
 		let not = (streamChecker.stopped ? "not " : "")
-		message.channel.sendMessage(`Stream check is ${not}active.`);
+		m.channel.sendMessage(`Stream check is ${not}active.`);
 	} 
-	else if (message.content.startsWith("!streams")){
-		let mymsg = reloadStreams(message.channel.id)
+	else if (m.content === "!streams"){
+		let mymsg = reloadStreams(m.channel.id)
 		if (mymsg != ""){
-			message.channel.sendMessage(`Loading this channel's streams: ${mymsg}`)
-		} else message.channel.sendMessage(`No streams linked to this channel.`)
+			m.channel.sendMessage(`Loading this channel's streams: ${mymsg}`)
+		} else m.channel.sendMessage(`No streams linked to this channel.`)
 	}
-	else if (message.content.startsWith("!help")){
-		message.channel.sendMessage("Load this channel's streams: `!streams` \n")// \nSee code: !epoch")
+	else if (m.content.startsWith("!help")){
+		m.channel.sendMessage("Load this channel's streams: `!streams` \n")// \nSee code: !epoch")
 	} 
-	else if (message.content.startsWith("!logs")){
-		if (message.channel.type == "text"){
-			let args = message.content.split(" ")
+	else if (m.content.startsWith("!logs")){
+		if (m.channel.type == "text"){
+			let args = m.content.split(" ")
 			let limit = 0
 			if (args.length > 1) {
 				if (args[1] > 0 ) limit = args[1]
 			}
-			if (message.author.id == settings.botowner){
-				fs.writeFileSync(message.guild.name+"_"+message.channel.name+"-0.log","")
-				new Log(message, 0, limit)
-			} else message.channel.sendMessage("Ask Red to do this, thanks. :>")
+			if (m.author.id == settings.botowner){
+				fs.writeFileSync(m.guild.name+"_"+m.channel.name+"-0.log","")
+				new Log(m, 0, limit)
+			} else m.channel.sendMessage("Ask Red to do this, thanks. :>")
 		}
 	} 
-	else if (message.content.startsWith("!slap")){
-		let args = message.content.split(" ")
+	else if (m.content.startsWith("!slap")){
+		let args = m.content.split(" ")
 		if (args.length > 1) {
 			htmltable.convertUrl("http://bs1.wikidot.com/moves", (htable)=> {
 				htable = htable[htable.length-1]
 				let move = htable[Math.floor( Math.random()*(htable.length-1) )+1][0]
 				let rand2 = Math.floor(Math.random()*20)+1
 				let target = args[1]
-				if (1 == rand2) target = message.author.name
-				else if (20 == rand2) target = "the chat"
-				message.channel.sendMessage(`Epoch uses **${move}** on ${target}`)
+				if (1 == rand2) target = m.author.username + " (rekt)"
+				else if (20 == rand2) target = "`@EVERYONE`"
+				m.channel.sendMessage(`Epoch uses **${move}** on ${target}`)
 			})
 		}
 	} 
-	else if (message.content.startsWith("??")){
+	else if (m.content.startsWith("?")){
+		let page = m.content.split(" ")[0].split("?")[1]
+		let charCode = page.charCodeAt(0) % 32
+		if (charCode> 0 && charCode < 27) {
+			m.channel.sendMessage("http://bs1.wikidot.com/"+page)
+		}
+	}
+	else if (m.content.startsWith("!avatar")){
+		if (m.author.id == settings.botowner){
+			client.user.setAvatar("./avatar.png")
+		}
 	} 
 });
 
@@ -307,13 +357,15 @@ function reloadStreams(id){
 	let mainMatch = ""
 	let riderMatch = ""
 	for (var y = 0; y < teams.length; y++){
-		if (teams[y].chans.startsWith(id)){
-			streamChecker.Pause()
-			mainMatch += "\n<" + teams[y].url + "> (" + teams[y].tags + ")"
-			teams[y].wikiStreamList()
-		} else if (teams[y].chans.indexOf(id) != -1) {
-			riderMatch += "\n<" + teams[y].url + "> (" + teams[y].tags + ")"
-		}
+		try {
+			if (teams[y].chans.startsWith(id)){
+				streamChecker.Pause()
+				mainMatch += "\n<" + teams[y].url + "> (" + teams[y].tags + ")"
+				teams[y].wikiStreamList()
+			} else if (teams[y].chans.indexOf(id) != -1) {
+				riderMatch += "\n<" + teams[y].url + "> (" + teams[y].tags + ")"
+			}
+		} catch(e) {}
 	}
 	if (riderMatch != ""){
 		mainMatch += "\nSecondary lists (not reloaded):" + riderMatch
