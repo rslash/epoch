@@ -265,7 +265,7 @@ clog("new stream: " + this.nick)
 //				if (upM < 10){upM = "0" + upM}	
 //			let upstring = (this.uptime != 0 ? `(${upHr} : ${upM})` : "( NEW )")
 				
-			let newmsg = `**${this.nick}**  ▶ ${this.newstat.game}` + 
+			let newmsg = `**${this.nick}**  ${this.IconEval()} ${this.newstat.game}` + 
 					"\n" + `\`${this.newstat.title}\` \n<${this.formal_url}>`
 			let destChannel = (DEBUG != 1 ? client.channels.get(this.chans[0]) : testChan)
 
@@ -319,6 +319,13 @@ clog("new stream: " + this.nick)
 			}
 		}
 		return tmatch
+	}
+	this.IconEval = () => {
+		let icon = "▶" // :arrow_forward:
+		if ( this.newstat.title.toLowerCase().indexOf("rando") != -1){
+			icon = "🎲" // :game_die:
+		}
+		return icon
 	}
 }
 
