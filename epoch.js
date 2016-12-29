@@ -155,7 +155,6 @@ tlog("new streams len: " +this.streams.length)
 
 function Stream(nick, url, tagstr, chanstr){
 	this.nick = nick
-clog("new stream: " + this.nick)
 	this.tags = tagstr.split(",")
 		for (var t = 0; t < this.tags.length; t++) this.tags[t] = this.tags[t].trim()
 	this.chans = chanstr.split(",")
@@ -250,7 +249,7 @@ clog("new stream: " + this.nick)
 	
 	this.announce = () => {
 		let tagMatch = this.TagEval()
-		if (tagMatch != 0){
+		if (tagMatch){
 			let now = Date.now() / 60000
 			this.newstat.changed = (
 				this.stat.game != this.newstat.game || 
@@ -266,7 +265,7 @@ clog("new stream: " + this.nick)
 //			let upstring = (this.uptime != 0 ? `(${upHr} : ${upM})` : "( NEW )")
 				
 			let newmsg = `**${this.nick}**  ${this.IconEval()} ${this.newstat.game}` + 
-					"\n" + `\`${this.newstat.title}\` \n<${this.formal_url}>`
+					 `\n<${this.formal_url}> \n\`${this.newstat.title}\``
 			let destChannel = (DEBUG != 1 ? client.channels.get(this.chans[0]) : testChan)
 
 			if (this.newstat.changed && !this.stat.changed){	//if changed (and not immediately after another change)
@@ -311,7 +310,7 @@ clog("new stream: " + this.nick)
 			if ( this.newstat.title.toLowerCase().indexOf(this.tags[tt].toLowerCase()) != -1	// find a match
 			  || this.newstat.game.toLowerCase().indexOf(this.tags[tt].toLowerCase()) != -1){
 				if (this.tags[tt].startsWith("-")){
-					return 0
+					return false
 					break
 				} else {
 					tmatch = true
