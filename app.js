@@ -37,8 +37,9 @@ function DetailRegister(prev_id){
 	for (var id in reg_list){
 		if (next){
 			client.fetchInvite(reg_list[id]).then( inv => {
-				let motd = (client.guilds.get(inv.guild.id) == undefined ? "N/A" : client.channels.get(inv.channel.id).topic)
-				let ct = (client.guilds.get(inv.guild.id) == undefined ? 0 : client.guilds.get(id).memberCount)
+				let g = client.guilds.get(inv.guild.id)
+				let motd = (g == undefined ? "N/A" : client.channels.get(inv.channel.id).topic)
+				let ct = (g == undefined ? 0 : g.memberCount)
 				let msg = "("+ct+")  **"+inv.guild.name+"**\n#"+inv.channel.name+" : `"+motd+"`"
 				reg_sort[id] = {"ct":ct,"msg":msg,"order":-1}
 			}).then(DetailRegister(id))
@@ -268,11 +269,11 @@ client.on("message", m => {
 							c.sendMessage("Oh dear. Please set Max Uses to Unlimited, then click Regen for a new invite.")
 						} else {
 							reg_list[inv.guild.id] = inv.code
+							reg_sort[inv.guild.id] = {"ct":0,"msg":"","order":-1}
 							let response = "Your invite to `"+inv.guild.name+" #"+inv.channel.name+"` has been registered!"
 							if (client.guilds.get(inv.guild.id) == null){
 								response += "\n(Now invite Epoch to your server! <https://goo.gl/WQeWzF>)"
 							} else {response += "\n(Thanks!)"}
-p(JSON.stringify(reg_list))
 							c.sendMessage(response)
 							statusChan.sendMessage("`"+inv.guild.name+"` registered by "+m.author.username+"#"+m.author.discriminator)
 							jfs.writeFileSync("reg_list.txt",reg_list)
