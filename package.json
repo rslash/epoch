@@ -9,10 +9,18 @@
   "author": "redslash",
   "license": "MIT",
   "dependencies": {
+    "bufferutil": "^3.0.0",
     "dateformat": "^2.0.0",
-    "discord.js": "^10.0.1",
+    "discord.js": "^11.1.0",
+    "erlpack": "hammerandchisel/erlpack",
     "html-table-to-array": "^1.0.0",
     "jsonfile": "^2.4.0",
-    "request": "^2.79.0"
+    "libsodium-wrappers": "^0.5.1",
+    "node-opus": "^0.2.5",
+    "opusscript": "^0.0.3",
+    "request": "^2.81.0",
+    "sodium": "^2.0.0",
+    "tabletojson": "^0.4.0",
+    "uws": "^0.14.1"
   }
 }
