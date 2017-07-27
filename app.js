@@ -16,7 +16,7 @@ var statusChan = "338402080869842945"
 var testChan = "338402321518166016"
 var debugChan = "339995355389362177"
 var TAGDELIM = ["epoch{","}"]
-var defaultAvi = "https://discordapp.com/api/v6/users/249293597164175370/avatars/83d5d1fa204378f8cf3535e24a4b03b9.jpg"
+var PASSIVETAGDELIM = ["manual{","}"]
 var new_status
 var saved_status = {}
 	try {saved_status = jfs.readFileSync("saved_status.txt", "utf8")} catch(e){}
@@ -284,13 +284,19 @@ client.on("message", m => {
 		} else if (m.content.startsWith("!ep-live")){
 			debugChan.sendMessage("`"+m.content+"` - "+m.author.username+"#"+m.author.discriminator+"")
 			let tags = m.content.split("!ep-live ")[1]
-			if (tags == undefined && c.topic.indexOf(TAGDELIM[0]) != -1){
-				tags = c.topic.split(TAGDELIM[0])[1].split(TAGDELIM[1])[0]
+			if (tags == undefined && c.topic != null){
+				if (c.topic.indexOf(TAGDELIM[0]) != -1){
+					tags = c.topic.split(TAGDELIM[0])[1].split(TAGDELIM[1])[0]
+				} else if (c.topic.indexOf(PASSIVETAGDELIM[0]) != -1){
+					tags = c.topic.split(PASSIVETAGDELIM[0])[1].split(PASSIVETAGDELIM[1])[0]
+				}
 			}
 			if (tags != undefined){
 				for (var s in saved_status){
 					Announce(s,saved_status[s],tags,c)
 				}
+			} else {
+				c.sendMessage("No tags provided.  (You may put  `manual{gametags,-titleoptout}`  in the Topic, for use with the  `!ep-live`  command)")
 			}
 		} else if (m.content.startsWith("!ep-servers")){
 			debugChan.sendMessage("`"+m.content+"` - "+m.author.username+"#"+m.author.discriminator+"")
@@ -311,12 +317,7 @@ client.on("message", m => {
 			}
 	*/
 		} else if (m.content.startsWith("!ep-setavi") && c.id == debugChan.id){
-			let arg = m.content.split("!ep-setavi")[1]
-			if (arg != undefined) {
-				try {
-					 client.user.setAvatar(arg)
-				} catch(){}
-			} else { client.user.setAvatar(defaultAvi) }
+			client.user.setAvatar("avi.jpg")
 		}
 	}
 });
