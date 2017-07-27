@@ -102,7 +102,8 @@ p("ONLINE: "+s)
 								try {
 									if (chan.topic.indexOf(TAGDELIM[0]) != -1){
 										let tagstring = chan.topic.split(TAGDELIM[0])[1].split(TAGDELIM[1])[0]	
-										Announce(s,new_status[s],tagstring,chan)
+										let resp = Announce(s,new_status[s],tagstring,chan)
+										if (resp != ""){chan.sendMessage(resp)}
 									}
 								} catch(e){}
 							}
@@ -147,6 +148,7 @@ function Announce(twitch,status,tagstring,chan){
 			break
 		}
 	}
+	let resp = ""
 	if (announce != false && status.online != "false"){
 		for (var t in tags){	//if NO optouts, then find GAME matches
 			if (announce != false && tags[t].startsWith("-") == false){	
@@ -155,13 +157,14 @@ function Announce(twitch,status,tagstring,chan){
 
 				if (status.game.toLowerCase().indexOf(gametag.toLowerCase()) != -1){
 					if (DEBUG){chan = testChan}
-					chan.sendMessage(abbrtag.trim()+" "+IconEval(status.title)+" **<http://twitch.tv/"+twitch+">**"+
-					"\n"+status.title+"")
+					resp = abbrtag.trim()+" "+IconEval(status.title)+" **<http://twitch.tv/"+twitch+">**"+
+					"\n"+status.title+""
 					break
 				}
 			}
 		}
 	}
+	return resp
 }
 
 function IconEval(title){
@@ -208,12 +211,12 @@ client.on("message", m => {
 		c.sendMessage("Add Epoch to your server: https://goo.gl/WQeWzF")
 	} else if (m.content === "!help" || m.content === "!ep" || m.content === "!ep-help"){
 		c.sendMessage(
-			  "1) Put this in a Channel Topic:  `epoch{ Game Tags,Game Tags=abbrevs,-Title Optouts}`" +
+			  "**(1)** Put this in a Channel Topic:  `epoch{ Game Tags,Game Tags=abbrevs,-Title Optouts}`" +
 			"\nExample:  `epoch{ Mario RPG = SMRPG, -[nosrl] }`" +
 			"\nUse  `!ep-live any,tags,-here`  for list of live streams  (you may DM @Epoch#4428 )"+
-			"\n2) To enable Add command (`!ep-add Twitch1,Twitch2,`),  please Register your server (`!ep-reg invitecode`)"+
+			"\n**(2)** To enable the Add command (`!ep-add Twitch1,Twitch2,`),  please Register your server (`!ep-reg invitecode`)"+
 			"\nUse  `!ep-servers`  to see list of reg'd servers."+
-			"\n3) Epoch's bot-invite is <https://goo.gl/WQeWzF>  Questions/comments -> <https://discord.gg/vbFwyP5>"
+			"\n**(3)** Epoch's bot-invite is <https://goo.gl/WQeWzF>  Questions/comments -> <https://discord.gg/vbFwyP5>"
 		)
 	} else if (m.content.startsWith("!ep")){
 		if (m.content.startsWith("!ep-add") && m.guild != null){
@@ -296,8 +299,22 @@ client.on("message", m => {
 				}
 			}
 			if (tags != undefined){
+				let resp = ""
 				for (var s in saved_status){
-					Announce(s,saved_status[s],tags,c)
+					let ann = Announce(s,saved_status[s],tags,c)
+					if (ann != ""){
+						if (resp == ""){
+							resp = ann
+						} else if ((resp+ann).length > MAX_MSG_LENGTH){
+							c.sendMessage(resp)
+							resp = ann
+						} else {
+							resp += "\n" + ann
+						}
+					}
+				}
+				if (resp != ""){
+					c.sendMessage(resp)
 				}
 			} else {
 				c.sendMessage("No tags provided.  (You may put  `manual{gametags,-titleoptout}`  in the Topic, for use with the  `!ep-live`  command)")
