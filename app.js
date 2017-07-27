@@ -2,16 +2,15 @@
 
 "use strict";
 const DEBUG = 1
+function p(s){console.log(s)}
 
 const Discord = require("discord.js")
 const settings = require("./settings.json")
 const client = new Discord.Client();
-var htmltable = require("tabletojson")
 var request = require("request")
 var fs = require("fs")
 var jfs = require("jsonfile")
 var tform = require("dateformat")
-function p(s){console.log(s)}
 
 var statusChan = "338402080869842945"
 var testChan = "338402321518166016"
@@ -38,6 +37,7 @@ function DetailRegister(prev_id){
 	for (var id in reg_list){
 		if (next){
 			client.fetchInvite(reg_list[id]).then( inv => {
+p("40")
 				let motd = (client.guilds.get(inv.guild.id) == undefined ? "N/A" : client.channels.get(inv.channel.id).topic)
 				let ct = (client.guilds.get(inv.guild.id) == undefined ? 0 : client.guilds.get(id).memberCount)
 				let msg = "("+ct+")  **"+inv.guild.name+"**\n#"+inv.channel.name+" : `"+motd+"`"
@@ -75,6 +75,7 @@ function UpdateTwitchStatus(){
 	let req_url = ""
 	let count = 0
 	for (var s in saved_status){
+p("78")
 		if (count == 0){
 			req_url = base_url + s
 			count++
@@ -201,108 +202,116 @@ client.on("ready", () => {
 
 client.on("message", m => {
 	let c = m.channel
-
-	if (m.content === "!ping"){
+p("205")
+	if (m.content === "!ping" || m.content === "!ep-ping"){
 		c.sendMessage("pong, dude!")
-	} else if (m.content === "!help" || m.content === "!commands"){
+	} else if (m.content === "!invite"){
+		c.sendMessage("Add Epoch to your server: https://goo.gl/WQeWzF")
+	} else if (m.content === "!help" || m.content === "!ep" || m.content === "!ep-help"){
 		c.sendMessage(
 			  "1) Put this in a Channel Topic:  `epoch{ Game Tags,Game Tags=abbrevs,-Title Optouts}`" +
 			"\nExample:  `epoch{ Mario RPG = SMRPG, -[nosrl] }`" +
-			"\nUse  `!live any,tags,-here`  for list of live streams  (you may DM @Epoch#4428 )"+
-			"\n2) To enable Add command (`!add Twitch1,Twitch2,`),  please Register your server (`!reg invitecode`)"+
-			"\nUse  `!servers`  to see list of reg'd servers."+
-			"\n3) Thanks for stream!  Questions or comments -> <https://discord.gg/vbFwyP5>"
+			"\nUse  `!ep-live any,tags,-here`  for list of live streams  (you may DM @Epoch#4428 )"+
+			"\n2) To enable Add command (`!ep-add Twitch1,Twitch2,`),  please Register your server (`!ep-reg invitecode`)"+
+			"\nUse  `!ep-servers`  to see list of reg'd servers."+
+			"\n3) Epoch's bot-invite is <https://goo.gl/WQeWzF>  Questions/comments -> <https://discord.gg/vbFwyP5>"
 		)
-	} else if (m.content.startsWith("!add") && m.guild != null){
-		debugChan.sendMessage("`"+m.content+"` - "+m.author.username+"#"+m.author.discriminator+" (from `"+m.guild.name+"`)")
-		let reg_exists = false
-		client.fetchInvite(reg_list[m.guild.id]).then( inv => {
-			reg_exists = inv
+	} else if (m.content.startsWith("!ep")){
+		if (m.content.startsWith("!ep-add") && m.guild != null){
+			debugChan.sendMessage("`"+m.content+"` - "+m.author.username+"#"+m.author.discriminator+" (from `"+m.guild.name+"`)")
+			let reg_exists = false
+			client.fetchInvite(reg_list[m.guild.id]).then( inv => {
+				reg_exists = inv
 
-			let args = m.content.split("!add")[1]
-			args = args.split(",")
-			let alladded = ""
-			let allmatched = ""
-			for (var a in args){
-				args[a] = args[a].trim().toLowerCase()
-				let match = false
-				for (var s in saved_status){
-					if (args[a] == s){
-						match = true
-						allmatched += s + ","
+				let args = m.content.split("!ep-add")[1]
+				args = args.split(",")
+				let alladded = ""
+				let allmatched = ""
+				for (var a in args){
+					args[a] = args[a].trim().toLowerCase()
+					let match = false
+					for (var s in saved_status){
+						if (args[a] == s){
+							match = true
+							allmatched += s + ","
+						}
+					}
+					if (match == false && args[a] != ""){
+						alladded += args[a]+","
+						saved_status[args[a]] = {"online":"false","game":"","title":"","lastonline":0}
 					}
 				}
-				if (match == false && args[a] != ""){
-					alladded += args[a]+","
-					saved_status[args[a]] = {"online":"false","game":"","title":"","lastonline":0}
+				let response = ""
+				if (alladded != ""){
+					response += "Added "+alladded+" "
+					statusChan.sendMessage(alladded+" added by "+m.author.username+"#"+m.author.discriminator+" (from `"+m.guild.name+"`)")
 				}
-			}
-			let response = ""
-			if (alladded != ""){
-				response += "Added "+alladded+" "
-				statusChan.sendMessage(alladded+" added by "+m.author.username+"#"+m.author.discriminator+" (from `"+m.guild.name+"`)")
-			}
-			if (allmatched != ""){response += " (Already added "+allmatched+")"}
-			if (response != ""){
-				c.sendMessage(response)
-			}
-		}).then( i => {
-			if (reg_exists == false){
-				c.sendMessage("Oh dear. In order to use Add command, `"+m.guild.name+"`'s owner must register this server using  `!reg invitecode`... :>")
-			}
-		}).catch()
-	} else if (m.content.startsWith("!reg") && m.guild != null){
-		debugChan.sendMessage("`"+m.content+"` - "+m.author.username+"#"+m.author.discriminator+" (from `"+m.guild.name+"`)")
-		if (m.author.id == m.guild.ownerID){
-			client.fetchInvite(m.content.split(" ")[1]).then( inv => {
-				try{
-					if (inv.max_age != null){
-						c.sendMessage("Oh dear. Please set Expiry to None, then click Regen for a new invite.")
-					} else if (inv.max_uses != null){
-						c.sendMessage("Oh dear. Please set Max Uses to Unlimited, then click Regen for a new invite.")
-					} else {
-						client.fetchGuild
-						reg_list[m.guild.id] = inv.code
-						c.sendMessage("Your invite to `"+inv.guild.name+" #"+inv.channel.name+"` has been registered! (Thanks!)")
-						statusChan.sendMessage("`"+m.guild.name+"` registered by "+m.author.username+"#"+m.author.discriminator)
-						jfs.writeFileSync("reg_list.txt",reg_list)
-					}
-				}catch(e){c.sendMessage("Oh my. Not a valid invite code?")}
+				if (allmatched != ""){response += " (Already added "+allmatched+")"}
+				if (response != ""){
+					c.sendMessage(response)
+				}
+			}).then( i => {
+				if (reg_exists == false){
+					c.sendMessage("Oh dear. In order to use Add command, `"+m.guild.name+"`'s owner must register this server using  `!reg invitecode`... :>")
+				}
 			}).catch()
-		} else {
-			m.guild.fetchMember(m.guild.ownerID).then( owner => {
-				c.sendMessage("Oh dear. Only server owner ("+owner.username+") can register.")
-			})
-		}
-	} else if (m.content.startsWith("!live")){
-		debugChan.sendMessage("`"+m.content+"` - "+m.author.username+"#"+m.author.discriminator+"")
-		let tags = m.content.split("!live ")[1]
-		if (tags == undefined && c.topic.indexOf(TAGDELIM[0]) != -1){
-			tags = c.topic.split(TAGDELIM[0])[1].split(TAGDELIM[1])[0]
-		}
-		if (tags != undefined){
-			for (var s in saved_status){
-				Announce(s,saved_status[s],tags,c)
-			}
-		}
-	} else if (m.content.startsWith("!servers")){
-		debugChan.sendMessage("`"+m.content+"` - "+m.author.username+"#"+m.author.discriminator+"")
-		let msg = ""
-		for (var i in register_msg){
-			if (register_msg[i].length + msg.length > MAX_MSG_LENGTH){
-				c.sendMessage(msg)
-				msg = "" + register_msg[i]
+		} else if (m.content.startsWith("!ep-reg") && m.guild != null){
+			debugChan.sendMessage("`"+m.content+"` - "+m.author.username+"#"+m.author.discriminator+" (from `"+m.guild.name+"`)")
+			if (m.author.id == m.guild.ownerID){
+				client.fetchInvite(m.content.split(" ")[1]).then( inv => {
+					try{
+						if (inv.max_age != null){
+							c.sendMessage("Oh dear. Please set Expiry to None, then click Regen for a new invite.")
+						} else if (inv.max_uses != null){
+							c.sendMessage("Oh dear. Please set Max Uses to Unlimited, then click Regen for a new invite.")
+						} else {
+							reg_list[m.guild.id] = inv.code
+							let response = "Your invite to `"+inv.guild.name+" #"+inv.channel.name+"` has been registered!"
+							if (client.guilds.get(inv.guild.id) == null){
+								response += "\n(Now invite Epoch to your server! https://goo.gl/WQeWzF)"
+							} else {response += "\n(Thanks!)"}
+							
+							c.sendMessage(response)
+							statusChan.sendMessage("`"+m.guild.name+"` registered by "+m.author.username+"#"+m.author.discriminator)
+							jfs.writeFileSync("reg_list.txt",reg_list)
+						}
+					}catch(e){c.sendMessage("Oh my. Not a valid invite code?")}
+				}).catch()
 			} else {
-				msg += "\n" + register_msg[i]
+				m.guild.fetchMember(m.guild.ownerID).then( owner => {
+					c.sendMessage("Oh dear. Only server owner ("+owner.username+") can register.")
+				})
 			}
+		} else if (m.content.startsWith("!ep-live")){
+			debugChan.sendMessage("`"+m.content+"` - "+m.author.username+"#"+m.author.discriminator+"")
+			let tags = m.content.split("!ep-live ")[1]
+			if (tags == undefined && c.topic.indexOf(TAGDELIM[0]) != -1){
+				tags = c.topic.split(TAGDELIM[0])[1].split(TAGDELIM[1])[0]
+			}
+			if (tags != undefined){
+				for (var s in saved_status){
+					Announce(s,saved_status[s],tags,c)
+				}
+			}
+		} else if (m.content.startsWith("!ep-servers")){
+			debugChan.sendMessage("`"+m.content+"` - "+m.author.username+"#"+m.author.discriminator+"")
+			let msg = ""
+			for (var i in register_msg){
+				if (register_msg[i].length + msg.length > MAX_MSG_LENGTH){
+					c.sendMessage(msg)
+					msg = "" + register_msg[i]
+				} else {
+					msg += "\n" + register_msg[i]
+				}
+			}
+			c.sendMessage(msg)
+	/*	} else if (m.content.startsWith("!ep-reset")){
+			for (var i in saved_status){
+				saved_status[i].lastonline = 0
+				saved_status[i].online = "false"
+			}
+	*/
 		}
-		c.sendMessage(msg)
-/*	} else if (m.content.startsWith("!reset")){
-		for (var i in saved_status){
-			saved_status[i].lastonline = 0
-			saved_status[i].online = "false"
-		}
-*/
 	}
 });
 
