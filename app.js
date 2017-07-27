@@ -155,7 +155,7 @@ function Announce(twitch,status,tagstring,chan){
 
 				if (status.game.toLowerCase().indexOf(gametag.toLowerCase()) != -1){
 					if (DEBUG){chan = testChan}
-					chan.send(abbrtag.trim()+" "+IconEval(status.title)+" **<http://twitch.tv/"+twitch+">**"+
+					chan.sendMessage(abbrtag.trim()+" "+IconEval(status.title)+" **<http://twitch.tv/"+twitch+">**"+
 					"\n"+status.title+"")
 					break
 				}
@@ -194,7 +194,7 @@ client.on("ready", () => {
 	statusChan = client.channels.get(statusChan)
 	debugChan = client.channels.get(debugChan)
 	testChan = client.channels.get(testChan)
-	debugChan.send("Bot restarted")
+	debugChan.sendMessage("Bot restarted")
 	UpdateTwitchStatus()
 	DetailRegister(0)
 })
@@ -203,9 +203,9 @@ client.on("message", m => {
 	let c = m.channel
 
 	if (m.content === "!ping"){
-		c.send("pong, dude!")
+		c.sendMessage("pong, dude!")
 	} else if (m.content === "!help" || m.content === "!commands"){
-		c.send(
+		c.sendMessage(
 			  "1) Put this in a Channel Topic:  `epoch{ Game Tags,Game Tags=abbrevs,-Title Optouts}`" +
 			"\nExample:  `epoch{ Mario RPG = SMRPG, -[nosrl] }`" +
 			"\nUse  `!live any,tags,-here`  for list of live streams  (you may DM @Epoch#4428 )"+
@@ -214,7 +214,7 @@ client.on("message", m => {
 			"\n3) Thanks for stream!  Questions or comments -> <https://discord.gg/vbFwyP5>"
 		)
 	} else if (m.content.startsWith("!add") && m.guild != null){
-		debugChan.send("`"+m.content+"` - "+m.author.username+"#"+m.author.discriminator+" (from `"+m.guild.name+"`)")
+		debugChan.sendMessage("`"+m.content+"` - "+m.author.username+"#"+m.author.discriminator+" (from `"+m.guild.name+"`)")
 		let reg_exists = false
 		client.fetchInvite(reg_list[m.guild.id]).then( inv => {
 			reg_exists = inv
@@ -240,42 +240,42 @@ client.on("message", m => {
 			let response = ""
 			if (alladded != ""){
 				response += "Added "+alladded+" "
-				statusChan.send(alladded+" added by "+m.author.username+"#"+m.author.discriminator+" (from `"+m.guild.name+"`)")
+				statusChan.sendMessage(alladded+" added by "+m.author.username+"#"+m.author.discriminator+" (from `"+m.guild.name+"`)")
 			}
 			if (allmatched != ""){response += " (Already added "+allmatched+")"}
 			if (response != ""){
-				c.send(response)
+				c.sendMessage(response)
 			}
 		}).then( i => {
 			if (reg_exists == false){
-				c.send("Oh dear. In order to use Add command, `"+m.guild.name+"`'s owner must register this server using  `!reg invitecode`... :>")
+				c.sendMessage("Oh dear. In order to use Add command, `"+m.guild.name+"`'s owner must register this server using  `!reg invitecode`... :>")
 			}
 		}).catch()
 	} else if (m.content.startsWith("!reg") && m.guild != null){
-		debugChan.send("`"+m.content+"` - "+m.author.username+"#"+m.author.discriminator+" (from `"+m.guild.name+"`)")
+		debugChan.sendMessage("`"+m.content+"` - "+m.author.username+"#"+m.author.discriminator+" (from `"+m.guild.name+"`)")
 		if (m.author.id == m.guild.ownerID){
 			client.fetchInvite(m.content.split(" ")[1]).then( inv => {
 				try{
 					if (inv.max_age != null){
-						c.send("Oh dear. Please set Expiry to None, then click Regen for a new invite.")
+						c.sendMessage("Oh dear. Please set Expiry to None, then click Regen for a new invite.")
 					} else if (inv.max_uses != null){
-						c.send("Oh dear. Please set Max Uses to Unlimited, then click Regen for a new invite.")
+						c.sendMessage("Oh dear. Please set Max Uses to Unlimited, then click Regen for a new invite.")
 					} else {
 						client.fetchGuild
 						reg_list[m.guild.id] = inv.code
-						c.send("Your invite to `"+inv.guild.name+" #"+inv.channel.name+"` has been registered! (Thanks!)")
-						statusChan.send("`"+m.guild.name+"` registered by "+m.author.username+"#"+m.author.discriminator)
+						c.sendMessage("Your invite to `"+inv.guild.name+" #"+inv.channel.name+"` has been registered! (Thanks!)")
+						statusChan.sendMessage("`"+m.guild.name+"` registered by "+m.author.username+"#"+m.author.discriminator)
 						jfs.writeFileSync("reg_list.txt",reg_list)
 					}
-				}catch(e){c.send("Oh my. Not a valid invite code?")}
+				}catch(e){c.sendMessage("Oh my. Not a valid invite code?")}
 			}).catch()
 		} else {
 			m.guild.fetchMember(m.guild.ownerID).then( owner => {
-				c.send("Oh dear. Only server owner ("+owner.username+") can register.")
+				c.sendMessage("Oh dear. Only server owner ("+owner.username+") can register.")
 			})
 		}
 	} else if (m.content.startsWith("!live")){
-		debugChan.send("`"+m.content+"` - "+m.author.username+"#"+m.author.discriminator+"")
+		debugChan.sendMessage("`"+m.content+"` - "+m.author.username+"#"+m.author.discriminator+"")
 		let tags = m.content.split("!live ")[1]
 		if (tags == undefined && c.topic.indexOf(TAGDELIM[0]) != -1){
 			tags = c.topic.split(TAGDELIM[0])[1].split(TAGDELIM[1])[0]
@@ -286,17 +286,17 @@ client.on("message", m => {
 			}
 		}
 	} else if (m.content.startsWith("!servers")){
-		debugChan.send("`"+m.content+"` - "+m.author.username+"#"+m.author.discriminator+"")
+		debugChan.sendMessage("`"+m.content+"` - "+m.author.username+"#"+m.author.discriminator+"")
 		let msg = ""
 		for (var i in register_msg){
 			if (register_msg[i].length + msg.length > MAX_MSG_LENGTH){
-				c.send(msg)
+				c.sendMessage(msg)
 				msg = "" + register_msg[i]
 			} else {
 				msg += "\n" + register_msg[i]
 			}
 		}
-		c.send(msg)
+		c.sendMessage(msg)
 /*	} else if (m.content.startsWith("!reset")){
 		for (var i in saved_status){
 			saved_status[i].lastonline = 0
