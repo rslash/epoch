@@ -73,73 +73,99 @@ function SortRegister(){
 function UpdateTwitchStatus(){
 	new_status = {}
 	let req_url = ""
-	let count = 0
+	let namecount = 0
+	let last_req = false
 	for (var s in saved_status){
-		if (count == 0){
+		if (namecount == 0){
 			req_url = base_url + s
-			count++
-		} else if (count < MAX_URL_NAMES && ((req_url + "," + s).length < MAX_URL_LENGTH)){
+			namecount++
+		} else if (namecount < MAX_URL_NAMES && ((req_url + "," + s).length < MAX_URL_LENGTH)){
 			req_url += "," + s
-			count++
+			namecount++
 		} else {
-			request(req_url, (err, response, body) => {HandleResponse(err, response, body)})
-			count = 0
+			Request(req_url,last_req)
+			namecount = 0
 		}
 	}
+	last_req = true
+	Request(req_url, last_req)
+}
 
+function Request(req_url,last_req){
 	request(req_url, (err, response, body) => {
-		HandleResponse(err, response, body)
-		//finish up
 		let now = Date.now()
-		for (var s in saved_status){
-			if (new_status[s] != undefined){	//ONLINE
-p("ONLINE: "+s)
-				if (saved_status[s].online == "false" || saved_status[s].game != new_status[s].game){
-					if (now - saved_status[s].lastonline > 5*60*1000){
-
-						for (var [key, chan] of client.channels){ //check every Discord channel
-							if (chan.type == "text"){
-								try {
-									if (chan.topic.indexOf(TAGDELIM[0]) != -1){
-										let tagstring = chan.topic.split(TAGDELIM[0])[1].split(TAGDELIM[1])[0]	
-										let resp = Announce(s,new_status[s],tagstring,chan)
-										if (resp != ""){chan.sendMessage(resp)}
+		if (!err && 200 == response.statusCode){
+			try {
+				body = JSON.parse(body)
+			} catch(e){}
+			if (body.streams != null){
+				for (var b in body.streams){
+					let bs = body.streams[b]
+					new_status[bs.channel.name] = {
+						"online" : true,
+						"game" : bs.game || "no game",
+						"title" : bs.channel.status || "no title",
+						"lastonline" : now
+					}
+p("ONLINE: "+bs.channel.name)
+				}
+			}
+		}
+		if (last_req){
+			for (var [key, chan] of client.channels){ //check every Discord channel
+				if (chan.type == "text"){
+					if (chan.topic != null){
+						if (chan.topic.indexOf(TAGDELIM[0]) != -1){
+p(chan.topic)
+							let tagstring = chan.topic.split(TAGDELIM[0])[1].split(TAGDELIM[1])[0]	
+							let resp = ""
+							if (DEBUG){chan = testChan}
+							
+							for (var s in new_status){
+								if (saved_status[s].online == "false" || saved_status[s].game != new_status[s].game){
+									if (now - saved_status[s].lastonline > 5*60*1000){
+p("CHECK MATCH "+s)
+										let ann = Announce(s,new_status[s],tagstring)
+p("ANN "+ann)
+										if (ann != ""){
+											if (resp == ""){
+												resp = ann
+p("RESP START")
+											} else if ((resp+ann).length > MAX_MSG_LENGTH){
+												chan.sendMessage(resp)
+p("MET MAX")
+												resp = ann
+											} else {
+												resp += "\n" + ann
+p("RESP ADD")
+											}
+										}
 									}
-								} catch(e){}
+								}
+							}
+							if (resp != ""){
+p("SEND LAST")
+
+								chan.sendMessage(resp)
 							}
 						}
 					}
-				} 
-				saved_status[s] = new_status[s]
-			} else {
-				saved_status[s].online = "false"
+				}
 			}
+			for (var s in saved_status){
+				if (new_status[s] == undefined){
+if (saved_status[s].online == "true"){p(s+" OFFLINE")}
+					saved_status[s].online = "false"
+				} else {
+					saved_status[s] = new_status[s]
+				}				
+			}
+			jfs.writeFileSync("saved_status.txt",saved_status)
 		}
-		jfs.writeFileSync("saved_status.txt",saved_status)
 	})
 }
 
-function HandleResponse(err, response, body){
-	let now = Date.now()
-	if (!err && 200 == response.statusCode){
-		try {
-			body = JSON.parse(body)
-		} catch(e){}
-		if (body.streams != null){
-			for (var b in body.streams){
-				let bs = body.streams[b]
-				new_status[bs.channel.name] = {
-					"online" : true,
-					"game" : bs.game || "no game",
-					"title" : bs.channel.status || "no title",
-					"lastonline" : now
-				}
-			} 
-		}
-	}
-}
-
-function Announce(twitch,status,tagstring,chan){
+function Announce(twitch,status,tagstring){
 	let tags = tagstring.split(",")
 	let announce = true
 	for (var t in tags){	//first: find TITLE optouts
@@ -156,8 +182,7 @@ function Announce(twitch,status,tagstring,chan){
 				let abbrtag = tags[t].split("=")[1] || status.game
 
 				if (status.game.toLowerCase().indexOf(gametag.toLowerCase()) != -1){
-					if (DEBUG){chan = testChan}
-					resp = abbrtag.trim()+" "+IconEval(status.title)+" **<http://twitch.tv/"+twitch+">**"+
+					resp = "**"+abbrtag.trim()+"** "+IconEval(status.title)+" **<http://twitch.tv/"+twitch+">**"+
 					"\n"+status.title+""
 					break
 				}
@@ -190,7 +215,7 @@ setInterval(() => {
 }, 10*1000 )
 setInterval(() => {
 	UpdateTwitchStatus()
-}, 30*1000 )
+}, 15*1000 )
 
 client.on("ready", () => {
 	p("Bot online");
@@ -246,7 +271,7 @@ client.on("message", m => {
 				let response = ""
 				if (alladded != ""){
 					response += "Added "+alladded+" "
-					statusChan.sendMessage(alladded+" added by "+m.author.username+"#"+m.author.discriminator+" (from `"+m.guild.name+"`)")
+					statusChan.sendMessage("`"+alladded+"` added by "+m.author.username+"#"+m.author.discriminator+" (from `"+m.guild.name+"`)")
 				}
 				if (allmatched != ""){response += " (Already added "+allmatched+")"}
 				if (response != ""){
@@ -301,7 +326,7 @@ client.on("message", m => {
 			if (tags != undefined){
 				let resp = ""
 				for (var s in saved_status){
-					let ann = Announce(s,saved_status[s],tags,c)
+					let ann = Announce(s,saved_status[s],tags)
 					if (ann != ""){
 						if (resp == ""){
 							resp = ann
@@ -331,12 +356,13 @@ client.on("message", m => {
 				}
 			}
 			c.sendMessage(msg)
-	/*	} else if (m.content.startsWith("!ep-reset")){
+		} else if (m.content.startsWith("!ep-reset") && c.id == debugChan.id){
 			for (var i in saved_status){
 				saved_status[i].lastonline = 0
 				saved_status[i].online = "false"
+p("RESET")
 			}
-	*/
+
 		} else if (m.content.startsWith("!ep-setavi") && c.id == debugChan.id){
 			client.user.setAvatar("avi.jpg")
 		}
