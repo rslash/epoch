@@ -16,7 +16,7 @@ var statusChan = "338402080869842945"
 var testChan = "338402321518166016"
 var debugChan = "339995355389362177"
 var TAGDELIM = ["epoch{","}"]
-
+var defaultAvi = "https://discordapp.com/api/v6/users/249293597164175370/avatars/83d5d1fa204378f8cf3535e24a4b03b9.jpg"
 var new_status
 var saved_status = {}
 	try {saved_status = jfs.readFileSync("saved_status.txt", "utf8")} catch(e){}
@@ -37,7 +37,6 @@ function DetailRegister(prev_id){
 	for (var id in reg_list){
 		if (next){
 			client.fetchInvite(reg_list[id]).then( inv => {
-p("40")
 				let motd = (client.guilds.get(inv.guild.id) == undefined ? "N/A" : client.channels.get(inv.channel.id).topic)
 				let ct = (client.guilds.get(inv.guild.id) == undefined ? 0 : client.guilds.get(id).memberCount)
 				let msg = "("+ct+")  **"+inv.guild.name+"**\n#"+inv.channel.name+" : `"+motd+"`"
@@ -75,7 +74,6 @@ function UpdateTwitchStatus(){
 	let req_url = ""
 	let count = 0
 	for (var s in saved_status){
-p("78")
 		if (count == 0){
 			req_url = base_url + s
 			count++
@@ -198,11 +196,12 @@ client.on("ready", () => {
 	debugChan.sendMessage("Bot restarted")
 	UpdateTwitchStatus()
 	DetailRegister(0)
+debugChan.sendMessage(client.user.avatarURL)
 })
 
 client.on("message", m => {
 	let c = m.channel
-p("205")
+
 	if (m.content === "!ping" || m.content === "!ep-ping"){
 		c.sendMessage("pong, dude!")
 	} else if (m.content === "!invite"){
@@ -311,6 +310,13 @@ p("205")
 				saved_status[i].online = "false"
 			}
 	*/
+		} else if (m.content.startsWith("!ep-setavi") && c.id == debugChan.id){
+			let arg = m.content.split("!ep-setavi")[1]
+			if (arg != undefined) {
+				try {
+					 client.user.setAvatar(arg)
+				} catch(){}
+			} else { client.user.setAvatar(defaultAvi) }
 		}
 	}
 });
