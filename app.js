@@ -196,7 +196,6 @@ client.on("ready", () => {
 	debugChan.sendMessage("Bot restarted")
 	UpdateTwitchStatus()
 	DetailRegister(0)
-debugChan.sendMessage(client.user.avatarURL)
 })
 
 client.on("message", m => {
@@ -251,36 +250,40 @@ client.on("message", m => {
 				}
 			}).then( i => {
 				if (reg_exists == false){
-					c.sendMessage("Oh dear. In order to use Add command, `"+m.guild.name+"`'s owner must register this server using  `!reg invitecode`... :>")
+					c.sendMessage("`"+m.guild.name+"`'s owner must register this server:  `!reg invitecode`")
 				}
 			}).catch()
 		} else if (m.content.startsWith("!ep-reg") && m.guild != null){
 			debugChan.sendMessage("`"+m.content+"` - "+m.author.username+"#"+m.author.discriminator+" (from `"+m.guild.name+"`)")
-			if (m.author.id == m.guild.ownerID){
-				client.fetchInvite(m.content.split(" ")[1]).then( inv => {
-					try{
+			let code = m.content.split(" ")[1]
+			if (code.indexOf("discord.gg/") != -1){
+				code = code.split("discord.gg/")[1]
+			}
+			client.fetchInvite(code).then( inv => {
+				if (m.author.id == m.guild.ownerID){
+					try {
 						if (inv.max_age != null){
 							c.sendMessage("Oh dear. Please set Expiry to None, then click Regen for a new invite.")
 						} else if (inv.max_uses != null){
 							c.sendMessage("Oh dear. Please set Max Uses to Unlimited, then click Regen for a new invite.")
 						} else {
-							reg_list[m.guild.id] = inv.code
+							reg_list[inv.guild.id] = inv.code
 							let response = "Your invite to `"+inv.guild.name+" #"+inv.channel.name+"` has been registered!"
 							if (client.guilds.get(inv.guild.id) == null){
-								response += "\n(Now invite Epoch to your server! https://goo.gl/WQeWzF)"
+								response += "\n(Now invite Epoch to your server! <https://goo.gl/WQeWzF>)"
 							} else {response += "\n(Thanks!)"}
-							
+p(JSON.stringify(reg_list))
 							c.sendMessage(response)
-							statusChan.sendMessage("`"+m.guild.name+"` registered by "+m.author.username+"#"+m.author.discriminator)
+							statusChan.sendMessage("`"+inv.guild.name+"` registered by "+m.author.username+"#"+m.author.discriminator)
 							jfs.writeFileSync("reg_list.txt",reg_list)
 						}
-					}catch(e){c.sendMessage("Oh my. Not a valid invite code?")}
-				}).catch()
-			} else {
-				m.guild.fetchMember(m.guild.ownerID).then( owner => {
-					c.sendMessage("Oh dear. Only server owner ("+owner.username+") can register.")
-				})
-			}
+					} catch(e) {c.sendMessage("Oh my. Not a valid invite code?")}
+				} else {
+					m.guild.fetchMember(m.guild.ownerID).then( owner => {
+						c.sendMessage("Oh dear. Only server owner ("+owner.username+") can register.")
+					}).catch()
+				}
+			}).catch()
 		} else if (m.content.startsWith("!ep-live")){
 			debugChan.sendMessage("`"+m.content+"` - "+m.author.username+"#"+m.author.discriminator+"")
 			let tags = m.content.split("!ep-live ")[1]
