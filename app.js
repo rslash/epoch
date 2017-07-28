@@ -64,7 +64,9 @@ function SortRegister(){
 				}
 			}
 		}
-		reg_sort[next].order = c	//...then assign number to that Register entry
+		try{
+			reg_sort[next].order = c	//...then assign number to that Register entry
+		}catch(e){debugChan.sendMessage("NEXT :"+next)}
 		register_msg[c] = reg_sort[next].msg
 		c++
 	}
@@ -124,27 +126,21 @@ p(chan.topic)
 							for (var s in new_status){
 								if (saved_status[s].online == "false" || saved_status[s].game != new_status[s].game){
 									if (now - saved_status[s].lastonline > 5*60*1000){
-p("CHECK MATCH "+s)
 										let ann = Announce(s,new_status[s],tagstring)
-p("ANN "+ann)
 										if (ann != ""){
 											if (resp == ""){
 												resp = ann
-p("RESP START")
 											} else if ((resp+ann).length > MAX_MSG_LENGTH){
 												chan.sendMessage(resp)
-p("MET MAX")
 												resp = ann
 											} else {
 												resp += "\n" + ann
-p("RESP ADD")
 											}
 										}
 									}
 								}
 							}
 							if (resp != ""){
-p("SEND LAST")
 
 								chan.sendMessage(resp)
 							}
