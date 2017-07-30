@@ -1,4 +1,5 @@
 //"Epoch Streambot II" 20170726 Redslash
+//http://chrono.wikidot.com/epoch
 
 "use strict";
 const DEBUG = 1
@@ -21,11 +22,6 @@ var PASSIVETAGDELIM = ["manual{","}"]
 var new_status = {}
 var saved_status = {}
 	try {saved_status = jfs.readFileSync("saved_status.txt", "utf8")} catch(e){}
-
-var register_msg = []
-var reg_list = {}
-	try {reg_list = jfs.readFileSync("reg_list.txt", "utf8")} catch(e){}
-var reg_sort = {}
 
 var base_url = "https://api.twitch.tv/kraken/streams?client_id=67w6z9i09xv2uoojdm9l0wsyph4hxo6&channel="
 var MAX_URL_NAMES = 90
@@ -92,7 +88,7 @@ if (saved_status[bc.name].online == "false") {p("NEW: "+bc.name) }
 							
 							for (var s in new_status){
 								if (saved_status[s].online == "false" || saved_status[s].game != new_status[s].game){
-									if (now - saved_status[s].lastonline > 5*60*1000){
+									if (now - saved_status[s].lastonline > 5*60*1000 && saved_status[s].ban != "true"){
 										let ann = Announce(s,new_status[s],tagstring)
 										if (ann != ""){
 											if (resp == ""){
@@ -128,7 +124,7 @@ if (saved_status[bc.name].online == "false") {p("NEW: "+bc.name) }
 
 function Announce(twitch,status,tagstring){
 	let tags = tagstring.split(",")
-	let announce = true
+	let announce = (status.ban != "true")
 	for (var t in tags){	//first: find TITLE optouts
 		if (tags[t] == ""){
 			tags[t] = "no game"
@@ -191,7 +187,7 @@ client.on("message", m => {
 	} else if (m.content === "!invite" || m.content === "!ep-invite"){
 		c.sendMessage("Add Epoch to your server: https://goo.gl/WQeWzF")
 	} else if (m.content === "!help" || m.content === "!ep" || m.content === "!ep-help"){
-		c.sendMessage("https://pastebin.com/RCYq5G6Y")
+		c.sendMessage("http://chrono.wikidot.com/epoch")
 	} else if (m.content.startsWith("!ep")){
 		if (m.content.startsWith("!ep-add") && m.guild != null){
 			debugChan.sendMessage("`"+m.content+"` - "+m.author.username+"#"+m.author.discriminator+" (from `"+m.guild.name+"`)")
@@ -251,18 +247,30 @@ client.on("message", m => {
 					c.sendMessage(resp)
 				}
 			} else {
-				c.sendMessage("No tags provided.  (You may put  `manual{gametags,-titleoptout}`  in the Topic, for use with the  `!ep-live`  command)")
+				c.sendMessage("No tags provided. (Hint: you can use \",\" to match \"no-game\" streams)")
 			}
-		} else if (m.content.startsWith("!ep-reset") && c.id == debugChan.id){
-			for (var i in saved_status){
-				saved_status[i].lastonline = 0
-				saved_status[i].online = "false"
+		} else if (c.id == debugChan.id){
+			if (m.content.startsWith("!ep-reset")){
+				for (var i in saved_status){
+					saved_status[i].lastonline = 0
+					saved_status[i].online = "false"
+				}
+			} else if (m.content.startsWith("!ep-remove")){
+				let name = m.content.split("!ep-remove ")[1]
+				if (saved_status[name] != undefined){
+					saved_status[name].ban = "true"
+					logChan.sendMessage("`"+name+"` de-listed by "+m.author.username+"#"+m.author.discriminator)
+				}
+			} else if (m.content.startsWith("!ep-restore")){
+				let name = m.content.split("!ep-restore ")[1]
+				if (saved_status[name] != undefined){
+					saved_status[name].ban = "false"
+					logChan.sendMessage("`"+name+"` restored by "+m.author.username+"#"+m.author.discriminator)				
+				}
+			} else if (m.content.startsWith("!ep-setavi")){
+				client.user.setAvatar("avi.jpg")
 			}
-
-		} else if (m.content.startsWith("!ep-setavi") && c.id == debugChan.id){
-			client.user.setAvatar("avi.jpg")
 		}
 	}
 });
-
 client.login(settings.token)
