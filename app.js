@@ -2,6 +2,7 @@
 
 "use strict";
 const DEBUG = 1
+const REQ_SECONDS = 15
 function p(s){console.log(s)}
 
 const Discord = require("discord.js")
@@ -17,7 +18,7 @@ var testChan = "338402321518166016"
 var debugChan = "339995355389362177"
 var TAGDELIM = ["epoch{","}"]
 var PASSIVETAGDELIM = ["manual{","}"]
-var new_status
+var new_status = {}
 var saved_status = {}
 	try {saved_status = jfs.readFileSync("saved_status.txt", "utf8")} catch(e){}
 
@@ -31,29 +32,32 @@ var MAX_URL_NAMES = 90
 var MAX_URL_LENGTH = 1000
 var MAX_MSG_LENGTH = 2000-200
 
-function UpdateTwitchStatus(){
-	new_status = {}
+function UpdateTwitchStatus(s_index){
 	let req_url = ""
-	let namecount = 0
-	let last_req = false
+	let url_namecount = 0
+	let final_req = true
 	for (var s in saved_status){
-		if (namecount == 0){
+		if (url_namecount < s_index){
+			url_namecount++
+		}
+		else if (url_namecount == s_index){
 			req_url = base_url + s
-			namecount++
-		} else if (namecount > MAX_URL_NAMES || ((req_url + "," + s).length > MAX_URL_LENGTH)){
-			Request(req_url,last_req)
-			req_url = base_url + s
-			namecount = 1
+			url_namecount++
+		} else if (url_namecount - s_index > MAX_URL_NAMES || ((req_url + "," + s).length > MAX_URL_LENGTH)){
+			final_req = false
+			Request(req_url,final_req,url_namecount)
+			break
 		} else {
 			req_url += "," + s
-			namecount++
+			url_namecount++
 		}
 	}
-	last_req = true
-	Request(req_url, last_req)
+	if (final_req == true){
+		Request(req_url,final_req,url_namecount)
+	}
 }
 
-function Request(req_url,last_req){
+function Request(req_url,final_req,s_index){
 	request(req_url, (err, response, body) => {
 		let now = Date.now()
 		if (!err && 200 == response.statusCode){
@@ -61,24 +65,27 @@ function Request(req_url,last_req){
 				body = JSON.parse(body)
 			} catch(e){}
 			if (body.streams != null){
+p("GOT STREAMS: "+s_index)
 				for (var b in body.streams){
 					let bs = body.streams[b]
-					new_status[bs.channel.name] = {
-						"online" : true,
+					let bc = bs.channel
+					new_status[bc.name] = {
+						"online" : "true",
 						"game" : bs.game || "no game",
-						"title" : bs.channel.status || "no title",
+						"title" : bc.status || "no title",
 						"lastonline" : now
 					}
-p("ONLINE: "+bs.channel.name)
+if (saved_status[bc.name].online == "false") {p("NEW: "+bc.name) }
 				}
 			}
 		}
-		if (last_req){
+		if (final_req == false){
+			UpdateTwitchStatus(s_index)
+		} else {
 			for (var [key, chan] of client.channels){ //check every Discord channel
 				if (chan.type == "text"){
 					if (chan.topic != null){
 						if (chan.topic.indexOf(TAGDELIM[0]) != -1){
-p(chan.topic)
 							let tagstring = chan.topic.split(TAGDELIM[0])[1].split(TAGDELIM[1])[0]	
 							let resp = ""
 							if (DEBUG){chan = testChan}
@@ -101,7 +108,6 @@ p(chan.topic)
 								}
 							}
 							if (resp != ""){
-
 								chan.sendMessage(resp)
 							}
 						}
@@ -110,7 +116,6 @@ p(chan.topic)
 			}
 			for (var s in saved_status){
 				if (new_status[s] == undefined){
-if (saved_status[s].online == "true"){p(s+" OFFLINE")}
 					saved_status[s].online = "false"
 				} else {
 					saved_status[s] = new_status[s]
@@ -125,9 +130,9 @@ function Announce(twitch,status,tagstring){
 	let tags = tagstring.split(",")
 	let announce = true
 	for (var t in tags){	//first: find TITLE optouts
-		if (tags[t].startsWith("-"){
+		if (tags[t].startsWith("-")){
 			let opt = tags[t].split("-")[1].trim().toLowerCase()
-			if (status.title.toLowerCase().indexOf(opt) != -1)){
+			if (status.title.toLowerCase().indexOf(opt) != -1){
 				announce = false
 				break
 			}
@@ -163,8 +168,9 @@ function IconEval(title){
 }
 
 setInterval(() => {
-	UpdateTwitchStatus()
-}, 15*1000 )
+	new_status = {}
+	UpdateTwitchStatus(0)
+}, REQ_SECONDS*1000 )
 
 client.on("ready", () => {
 	p("Bot online");
@@ -172,8 +178,7 @@ client.on("ready", () => {
 	debugChan = client.channels.get(debugChan)
 	testChan = client.channels.get(testChan)
 	debugChan.sendMessage("Bot restarted")
-	UpdateTwitchStatus()
-	DetailRegister(0)
+	UpdateTwitchStatus(0)
 })
 
 client.on("message", m => {
