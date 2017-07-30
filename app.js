@@ -130,7 +130,7 @@ function Announce(twitch,status,tagstring){
 	let tags = tagstring.split(",")
 	let announce = true
 	for (var t in tags){	//first: find TITLE optouts
-		if (tags[t] = ""){
+		if (tags[t] == ""){
 			tags[t] = "no game"
 		}
 		if (tags[t].startsWith("-")){
