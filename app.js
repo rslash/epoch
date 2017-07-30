@@ -2,7 +2,7 @@
 
 "use strict";
 const DEBUG = 1
-const REQ_SECONDS = 15
+const REQ_SECONDS = 25
 function p(s){console.log(s)}
 
 const Discord = require("discord.js")
@@ -130,11 +130,13 @@ function Announce(twitch,status,tagstring){
 	let tags = tagstring.split(",")
 	let announce = true
 	for (var t in tags){	//first: find TITLE optouts
+		if (tags[t] = ""){
+			tags[t] = "no game"
+		}
 		if (tags[t].startsWith("-")){
 			let opt = tags[t].split("-")[1].trim().toLowerCase()
 			if (status.title.toLowerCase().indexOf(opt) != -1){
 				announce = false
-				break
 			}
 		}
 	}
@@ -189,13 +191,7 @@ client.on("message", m => {
 	} else if (m.content === "!invite" || m.content === "!ep-invite"){
 		c.sendMessage("Add Epoch to your server: https://goo.gl/WQeWzF")
 	} else if (m.content === "!help" || m.content === "!ep" || m.content === "!ep-help"){
-		c.sendMessage(
-			  "**(1)** Put this in a Channel Topic:  `epoch{ Game Tags,Game Tags=abbrevs,-Title Optouts}`" +
-			"\nExample:  `epoch{ Mario RPG = SMRPG, -[nosrl] }`" +
-			"\n**(2)** To add Twitch channels, use  `!ep-add Twitch1,Twitch2,`"+
-			"\nFor list of live streams, use  `!ep-live any,tags,-here`  (you may DM @Epoch#4428 )"+
-			"\nEpoch's invite is <https://goo.gl/WQeWzF>  Questions/comments -> <https://discord.gg/vbFwyP5>"
-		)
+		c.sendMessage("https://pastebin.com/RCYq5G6Y")
 	} else if (m.content.startsWith("!ep")){
 		if (m.content.startsWith("!ep-add") && m.guild != null){
 			debugChan.sendMessage("`"+m.content+"` - "+m.author.username+"#"+m.author.discriminator+" (from `"+m.guild.name+"`)")
