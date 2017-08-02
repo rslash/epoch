@@ -14,9 +14,13 @@ var fs = require("fs")
 var jfs = require("jsonfile")
 var tform = require("dateformat")
 
-var logChan = "338402080869842945"
-var testChan = "338402321518166016"
-var debugChan = "339995355389362177"
+var logChanID = "338402080869842945"
+var testChanID = "338402321518166016"
+var debugChanID = "339995355389362177"
+var logChan
+var testChan
+var debugChan
+
 var TAGDELIM = ["epoch{","}"]
 var PASSIVETAGDELIM = ["manual{","}"]
 var new_status = {}
@@ -172,9 +176,9 @@ setInterval(() => {
 
 client.on("ready", () => {
 	p("Bot online");
-	logChan = client.channels.get(logChan)
-	debugChan = client.channels.get(debugChan)
-	testChan = client.channels.get(testChan)
+	logChan = client.channels.get(logChanID)
+	debugChan = client.channels.get(debugChanID)
+	testChan = client.channels.get(testChanID)
 	debugChan.sendMessage("Bot restarted")
 	UpdateTwitchStatus(0)
 })
