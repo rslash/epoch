@@ -158,7 +158,7 @@ function Announce(twitch,status,tagstring,guild){
 							break
 						}
 					}
-					abbrtag = abbrtag.split(">")[0]
+					abbrtag = abbrtag.split(">")[0].trim()
 					if (abbrtag.length == 0) abbrtag = status.game
 				}
 
@@ -206,7 +206,7 @@ client.on("message", m => {
 	} else if (m.content === "!invite" || m.content === "!ep-invite"){
 		c.sendMessage("Add Epoch to your server: https://goo.gl/WQeWzF")
 	} else if (m.content === "!help" || m.content === "!ep" || m.content === "!ep-help"){
-		c.sendMessage("http://chrono.wikidot.com/epoch")
+		c.sendMessage("http://chrono.wikidot.com/bot")
 	} else if (m.content.startsWith("!ep")){
 		if (m.content.startsWith("!ep-add") && m.guild != null){
 			let args = m.content.split("!ep-add")[1]
