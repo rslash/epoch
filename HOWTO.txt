@@ -1,0 +1,14 @@
+(DigitalDroplet One-Click App: Node on Ubuntu)
+(Log in: "root", password from email)
+git clone https://github.com/rslash/epoch
+cd epoch
+npm i discord.js		- should ONLY be Warnings, no Error
+npm i dateformat
+npm i request
+npm i jsonfile
+npm i
+vim app.js
+	change: debug=0
+vim settings.json
+	change: insert bot token
+node app
