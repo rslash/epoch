@@ -91,8 +91,8 @@ if (saved_status[bc.name].online == "false") {p("NEW: "+bc.name) }
 							if (DEBUG){chan = testChan}
 							
 							for (var s in new_status){
-								if (saved_status[s].online == "false" && saved_status[s].ban != "true"){
-									if (now - saved_status[s].lastonline > 5*60*1000 || saved_status[s].game != new_status[s].game){
+								if (saved_status[s].ban != "true"){
+									if ((saved_status[s].online == "false" && now - saved_status[s].lastonline > 5*60*1000) || saved_status[s].game != new_status[s].game){
 										let ann = Announce(s,new_status[s],tagstring,chan.guild)
 										if (ann != ""){
 											if (resp == ""){
