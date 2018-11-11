@@ -133,10 +133,15 @@ function Announce(twitch,status,tagstring,guild){
 	if (status.title.toLowerCase().indexOf("[nosrl]") != -1){ //the global TITLE optout
 			announce = false
 	} else {
-		for (var t in tags){	//first: find TITLE optouts
+		for (var t in tags){	//first: find TITLE optouts/opt-ins
 			if (tags[t].startsWith("-")){
 				let opt = tags[t].split("-")[1].trim().toLowerCase()
 				if (status.title.toLowerCase().indexOf(opt) != -1){
+					announce = false
+				}
+			} else if (tags[t].startsWith("+")){
+				let opt = tags[t].split("+")[1].trim().toLowerCase()
+				if (status.title.toLowerCase().indexOf(opt) == -1){
 					announce = false
 				}
 			}
