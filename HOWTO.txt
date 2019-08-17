@@ -1,14 +1,15 @@
-(DigitalDroplet One-Click App: Node on Ubuntu)
-(Log in: "root", password from email)
+(create a DigitalDroplet One-Click App: Node, on Ubuntu)
+(Log in to the Droplet's console: "root" & the password sent to your email)
+
 git clone https://github.com/rslash/epoch
 cd epoch
 npm i discord.js		- should ONLY be Warnings, no Error
 npm i dateformat
 npm i request
 npm i jsonfile
-npm i
+npm i				- this installs Epoch, after the above dependencies
 vim app.js
-	change: debug=0
+	make this edit: debug=0
 vim settings.json
-	change: insert bot token
+	make this edit: (insert your Discord Bot token)
 node app
